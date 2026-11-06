@@ -1,0 +1,14 @@
+streamlit
+docling
+ebooklib
+beautifulsoup4
+psycopg[binary]
+sqlalchemy
+pgvector
+pydantic
+pydantic-settings
+python-dotenv
+pymupdf
+pytesseract
+Pillow
+pytest

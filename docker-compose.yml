@@ -1,0 +1,15 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: book2brain-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-book2brain}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-book2brain}
+      POSTGRES_DB: ${POSTGRES_DB:-book2brain}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

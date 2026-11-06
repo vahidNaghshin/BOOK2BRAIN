@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.DS_Store
+
+storage/original/*
+storage/extracted/*
+storage/temporary/*
+!storage/*/.gitkeep
