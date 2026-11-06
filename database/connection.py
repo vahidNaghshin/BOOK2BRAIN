@@ -31,4 +31,12 @@ def check_connection() -> tuple[bool, str]:
             version = conn.execute(text("select version()")).scalar() or ""
         return True, version.split(" on ")[0]
     except Exception as exc:
-        return False, type(exc).__name__
+        # psycopg messages identify host, port and user but never the password.
+        reason = str(getattr(exc, "orig", None) or exc).strip().splitlines()
+        return False, reason[0] if reason else type(exc).__name__
+
+
+if __name__ == "__main__":
+    ok, info = check_connection()
+    print(("Connected: " if ok else "Not connected: ") + info)
+    raise SystemExit(0 if ok else 1)
