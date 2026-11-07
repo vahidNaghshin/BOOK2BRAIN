@@ -1,0 +1,4 @@
+[server]
+# Streamlit's own upload cap, in MB. Keep it equal to (or above) MAX_UPLOAD_SIZE_MB in .env;
+# the application enforces MAX_UPLOAD_SIZE_MB itself on the server.
+maxUploadSize = 100

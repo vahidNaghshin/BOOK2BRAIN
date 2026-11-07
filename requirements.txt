@@ -4,6 +4,7 @@ ebooklib
 beautifulsoup4
 psycopg[binary]
 sqlalchemy
+alembic
 pgvector
 pydantic
 pydantic-settings
