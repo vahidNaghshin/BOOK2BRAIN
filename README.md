@@ -141,6 +141,54 @@ On the first PDF it processes, Docling downloads its layout and table models (ab
 
 If the download fails with `CERTIFICATE_VERIFY_FAILED`, your network probably inspects TLS traffic (corporate proxy). Point Python at a certificate bundle that includes your company's root certificate for that first run, for example `export SSL_CERT_FILE=/path/to/ca-bundle.pem` (and `REQUESTS_CA_BUNDLE` to the same file). EPUB and DOCX processing do not need the models.
 
+## Equations
+
+Mathematics is extracted as **LaTeX with its source location**, never as flattened text. Equations are found while a document is processed (the text is saved first, so a problem with an equation can never fail the document) and shown in the **Equations** tab: rendered, with the raw LaTeX, the original source, the page/region, the surrounding text, a crop image of the region, how it was recognized, and a validation status. The tab can re-extract a document's equations at any time without touching its text.
+
+| Format | How equations are found | Notes |
+|---|---|---|
+| PDF (digital or scanned) | Docling's layout analysis finds formula regions (works without a text layer). Docling's formula model (`CodeFormulaV2`) turns them into LaTeX. Regions it can't read go to math OCR. | Display equations only; inline formulas in PDFs are not detected. Page number and bounding box kept. |
+| EPUB | MathML (`<math>`), LaTeX in the text (`$..$`, `$$..$$`, `\(..\)`, `\[..\]`) and images with LaTeX alt text. Equation images go to math OCR. | Inline vs display is known. An embedded TeX annotation is used verbatim. |
+| DOCX | Word equations (OMML) converted to LaTeX; the original OMML is kept. | An equation that can't be converted is stored as invalid with a reason instead of being dropped. |
+
+**Validation.** Every equation is `valid`, `uncertain` or `invalid`. LaTeX from the document's own markup (MathML, OMML, TeX) is valid if it parses. Model output is `valid` only when the model reported a confidence at or above `EQUATION_MIN_CONFIDENCE` or the PDF's own text layer agrees with it; on a scanned page there is nothing to compare with, so those results stay `uncertain` ("needs review") by design. The recognition `confidence` is only ever what an engine reports, and Docling's formula model reports none, so it is shown as "not reported". Unsafe commands (`\input`, `\write`, ...) are rejected, not rendered.
+
+**Normalization** is deterministic and idempotent: delimiters removed, spacing tidied (`\frac { 1 } { 2 }` → `\frac{1}{2}`), `\tag{n}` / `(n)` read as the equation number. The text as extracted is kept alongside (`original_latex`).
+
+### Measured quality
+
+Measured with this repository's tools on equations rendered from known LaTeX (20 equations: algebra, calculus, series, statistics, physics, chemistry, logic ...; `python -m tools.evaluate_equations`). "Exact" is strict: the LaTeX must match the ground truth after removing spaces and `\left`/`\right`, so equivalent but differently written LaTeX (`\lor` vs `\vee`) counts as a miss.
+
+| Scenario | Equation regions found | Exact | Validation |
+|---|---|---|---|
+| Digital PDF | 16 of 20 | 15 of 16 found | 16 valid (text layer agrees) |
+| Scanned PDF (image only) | 16 of 20 | 15 of 16 found | 16 uncertain (no text layer to confirm) |
+
+The four that were missed are missed by Docling's layout model, which sometimes does not mark a formula region at all. The 16th of the found regions differs only by equivalent notation. Recognition by itself, on isolated equation images (`python -m tools.compare_math_engines --engine docling|pix2text`):
+
+| Engine | Exact | Token similarity ≥ 0.95 | Mean similarity | Speed (CPU) |
+|---|---|---|---|---|
+| Docling formula model (default) | 18 of 20 | 19 of 20 | 0.985 | about 1.5 s per equation |
+| Pix2Text 1.1.7 (optional) | 9 of 20 | 11 of 20 | 0.863 | about 1.3 s per equation |
+
+The one real recognition error of the default engine was a lowercase `x` read as `X`; the other miss is equivalent notation. These are synthetic, cleanly rendered equations: real scans, handwriting, tight multi-line derivations and matrices will be harder, which is why model output is never reported as certain without evidence. Run `tools/evaluate_equations.py` on your own material to measure it.
+
+### Speed and the formula model
+
+Docling's formula model (about 600 MB, downloaded on first use like the layout models; see [Docling models](#docling-models)) runs only on pages that contain formula regions. With Docling's default settings it took about 194 s for one page with 5 equations on an Apple Silicon Mac (measured; the cause was not investigated further). `FORMULA_ENRICHMENT_DEVICE=cpu` with `FORMULA_ENRICHMENT_DTYPE=float32` (the defaults here) brought that to about 15 s, and the 10 formulas of the digital test document above to about 20 s. A book with hundreds of equations therefore takes minutes, not seconds; the work runs in the background.
+
+### Pictures that are really equations
+
+Layout analysis often labels an equation as a *picture*. Small, wide picture regions (up to 110 pt high) are therefore tried with math OCR and kept only if the result reads as mathematics (`EQUATION_SCAN_PICTURES`, at most `EQUATION_SCAN_PICTURES_MAX` per document; a real figure that gets tried is simply discarded). Kept ones are marked "recognised from a picture region".
+
+### Optional: Pix2Text
+
+`MATH_OCR_ENGINE=pix2text` uses [Pix2Text](https://github.com/breezedeus/pix2text) instead of Docling's model for the fallback route. It is **not** installed by default: it downgrades `transformers` and adds about 50 packages that conflict with Docling's, and it was less accurate here (table above). If you want it, install it in its own virtual environment and pin `rapidocr==3.9.2` (at the time of writing `rapidocr` 3.10 breaks Pix2Text's `cnstd` dependency). The app tells you if it is missing or broken.
+
+### Equation settings
+
+See `.env.example`: `EQUATION_EXTRACTION_ENABLED`, `FORMULA_ENRICHMENT_ENABLED/DEVICE/DTYPE`, `MATH_OCR_ENABLED/ENGINE`, `EQUATION_MIN_CONFIDENCE`, `EQUATION_STORE_CROPS`, `EQUATION_CROP_DPI`, `EQUATION_SCAN_PICTURES`, `EQUATION_SCAN_PICTURES_MAX`. If the formula model can't be loaded (no internet on first use), the Equations tab and the run summary say so, the document text is unaffected, and equations can be re-extracted later.
+
 ## Common tasks
 
 | Task | Command |
@@ -164,7 +212,8 @@ pytest
 
 Database tests use a separate database named after yours with a `_test` suffix (for example `book2brain_test`). It is created automatically and built with the real migrations, and your data is never touched. To use a different one, set `TEST_DATABASE_URL`; its name must contain `_test`. Uploaded files in tests go to temporary directories, and all test documents (PDF, EPUB, DOCX, scans) are generated in code, so no books are stored in the repository.
 
-- Tests that use the real Docling PDF models are skipped automatically if the models cannot be loaded (for example offline on a fresh machine). Run PDF processing once, or `docling-tools models download`, to enable them.
+- Tests that use the real Docling PDF models are skipped automatically if the models cannot be loaded (for example offline on a fresh machine). Run PDF processing once, or `docling-tools models download`, to enable them. The equation tests that run the real formula model are skipped separately if that model (about 600 MB, downloaded on first use) is missing.
+- Equation tests render their PDFs with matplotlib (a test-only dependency in `requirements.txt`).
 - Tests marked `ocr` use a real Tesseract installation and are skipped if it is missing. Run only them with `pytest -m ocr`, or leave them out with `pytest -m "not ocr"`. All other OCR tests use a fake engine.
 
 ## Troubleshooting the database connection
@@ -185,6 +234,7 @@ The app shows the same message under the title.
 | `DATABASE_URL is not set` | `.env` is missing. Run the app from the project folder after `cp .env.example .env`. |
 | `relation "books" does not exist` | The tables haven't been created. Run `alembic upgrade head`. |
 | `relation "extracted_blocks" does not exist` or `column ... stage does not exist` | The Day 3 migration hasn't been applied. Run `alembic upgrade head`. |
+| `relation "equations" does not exist` or `column ... equation_status does not exist` | The Day 3.1 migration hasn't been applied. Run `alembic upgrade head`. |
 
 ## Troubleshooting processing
 
@@ -198,6 +248,9 @@ Failed documents show the reason in the Processing tab, with the error code and 
 | `empty_document` / `no_meaningful_content` | No (or almost no) text was found. A PDF of blank pages, or of images that OCR could not read, ends here. Try a higher `OCR_DPI`. |
 | `unexpected_error` | A bug or environment problem. The traceback is in the error details and the app log. |
 | Download fails with `CERTIFICATE_VERIFY_FAILED` | See [Docling models](#docling-models). |
+| Equations tab: `equation_extraction_failed`, `formula_enrichment_failed` | The text is fine. The formula model could not be loaded (first use needs internet; see [Docling models](#docling-models)) or crashed. Fix the cause and press **Re-extract equations**. Math OCR is tried as a fallback where it works. |
+| Equations marked `uncertain` | Expected for model output with nothing to confirm it (scans, no reported confidence). Check them against the region image. |
+| `unsupported_omml` | A Word equation uses a structure the converter can't handle. It is listed as invalid with its original OMML kept; the rest of the document is unaffected. |
 
 ## Project layout
 
@@ -206,22 +259,27 @@ app/
   main.py          Streamlit entry point
   config.py        Settings (environment variables)
   schemas.py       Pydantic models (book metadata, read models)
-  ui/              Streamlit pages: upload.py, library.py, processing.py
+  ui/              Streamlit pages: upload.py, library.py, processing.py, equations.py
   services/        Business logic: book_service, document_service, storage_service,
                    file_validation, document_processing_service, job_runner
   parsing/         Parsers and OCR, independent of the UI and the database:
                    models.py (output models), base.py, parser_factory.py,
                    pdf_parser.py, epub_parser.py, docx_parser.py, ocr_service.py,
-                   scan_detection.py, text_normalizer.py
+                   scan_detection.py, text_normalizer.py, omml.py (Word equations)
+  parsing/equation/  Equation extraction: equation_service.py (orchestration), pdf_equations.py,
+                   equation_extractor.py (EPUB/DOCX), equation_ocr.py (math OCR engines),
+                   latex_normalizer.py, equation_validator.py, mathml_converter.py,
+                   equation_detector.py, math_symbols.py, equation_models.py
   repositories/    Database queries
 database/
   connection.py    Engine, sessions, connection check
-  models/          SQLAlchemy models (Book, Document, ProcessingRun, ProcessingError, ExtractedBlock)
+  models/          SQLAlchemy models (Book, Document, ProcessingRun, ProcessingError, ExtractedBlock, Equation)
   migrations/      Alembic migrations (configured by alembic.ini)
   init/            Scripts run when the Docker database is first created
 ingestion/         Reserved for later phases
 storage/           Default location of uploaded files (git-ignored)
 tests/             pytest suite
+tools/             Quality measurement: evaluate_equations.py, compare_math_engines.py
 ```
 
 The layers are kept separate: the UI calls services, services call parsers, repositories and the storage backend, and only repositories talk to the database. Parsers return structured results (`ParsingResult`) and never touch the database or the UI. Storage sits behind the `StorageBackend` interface in `storage_service.py`, so cloud storage can be added later.
@@ -233,3 +291,7 @@ The layers are kept separate: the UI calls services, services call parsers, repo
 - Page headers and footers detected by Docling are left out of PDF text. Text inside images that are not full-page scans is not OCR'd.
 - DOCX and EPUB have no page numbers; blocks are located by element and chapter references instead.
 - One document is processed at a time, and the work runs inside the app process: restarting the app interrupts a run (it can then be retried).
+- Equations: PDF inline formulas are not detected (only display equations); Docling's layout model misses some formula regions (4 of 20 in the synthetic test above); equation images in PDFs are recognized only inside regions the layout model finds; a model can still misread symbols (for example `x` as `X`), which is why unconfirmed model output is marked `uncertain`. Handwriting and degraded scans were not evaluated. Only the equation types listed in the table were tested; chemistry, units, and multi-line derivations are stored as ordinary equations without further structure.
+- On scanned PDFs, an equation that layout analysis labels a picture (rather than a formula) is still read by Tesseract as garbled text in the page's text blocks; the equation itself is recovered separately in the Equations tab. The text blocks for such regions are not cleaned up.
+- Docling can place a paragraph slightly out of order around formulas, so the "surrounding text" of an equation (taken from neighbouring blocks) can occasionally be off by a block.
+- Re-extracting equations re-reads the document, so it takes as long as the first extraction.

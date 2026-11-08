@@ -30,6 +30,17 @@ class ProcessingStage(enum.StrEnum):
     NORMALIZING = "normalizing"
 
 
+class EquationStatus(enum.StrEnum):
+    """Equation extraction progress for a run. Independent of the run and document status."""
+
+    NOT_STARTED = "not_started"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    COMPLETED_WITH_WARNINGS = "completed_with_warnings"
+    FAILED = "failed"
+    UNAVAILABLE = "unavailable"  # needed an engine or model that is not installed
+
+
 class ProcessingRun(UUIDPrimaryKeyMixin, Base):
     """One processing attempt for a document."""
 
@@ -52,6 +63,14 @@ class ProcessingRun(UUIDPrimaryKeyMixin, Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     # Extraction summary (page count, OCR pages, warnings...) for completed runs.
     result_summary: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Equation extraction runs after the text is saved and has its own status, so an equation
+    # problem never changes whether the document itself was processed successfully.
+    equation_status: Mapped[str] = mapped_column(
+        String(30),
+        default=EquationStatus.NOT_STARTED.value,
+        server_default=EquationStatus.NOT_STARTED.value,
+    )
+    equation_summary: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, server_default=func.now()
     )
@@ -71,6 +90,10 @@ class ProcessingRun(UUIDPrimaryKeyMixin, Base):
         CheckConstraint(
             "stage IN (" + ", ".join(f"'{member.value}'" for member in ProcessingStage) + ")",
             name="stage_valid",
+        ),
+        CheckConstraint(
+            "equation_status IN (" + ", ".join(f"'{m.value}'" for m in EquationStatus) + ")",
+            name="equation_status_valid",
         ),
     )
 

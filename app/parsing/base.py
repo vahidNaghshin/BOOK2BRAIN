@@ -11,6 +11,7 @@ from app.parsing.errors import EmptyDocumentError, ParserError
 from app.parsing.models import (
     ContentBlock,
     ExtractionStatus,
+    FormulaRegion,
     OcrSummary,
     ParseStage,
     ParsingIssue,
@@ -38,6 +39,7 @@ class Extraction:
     # True when some content is known to be missing (e.g. a page whose OCR failed).
     partial: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
+    formula_regions: list[FormulaRegion] = field(default_factory=list)
 
 
 class DocumentParser(ABC):
@@ -90,6 +92,7 @@ class DocumentParser(ABC):
             status=ExtractionStatus.PARTIAL if extraction.partial else ExtractionStatus.SUCCESS,
             ocr=extraction.ocr,
             metadata=extraction.metadata,
+            formula_regions=extraction.formula_regions,
         )
 
     @abstractmethod

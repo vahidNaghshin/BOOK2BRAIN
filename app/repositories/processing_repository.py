@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from database.models import (
     Document,
+    Equation,
     ExtractedBlock,
     ProcessingError,
     ProcessingRun,
@@ -134,4 +135,83 @@ class ExtractedBlockRepository:
         if page_number is not None:
             stmt = stmt.where(ExtractedBlock.page_number == page_number)
         stmt = stmt.order_by(ExtractedBlock.sequence_number).offset(offset).limit(limit)
+        return list(self.session.execute(stmt).scalars().all())
+
+    def ids_by_sequence(self, document_id: uuid.UUID) -> dict[int, uuid.UUID]:
+        stmt = select(ExtractedBlock.sequence_number, ExtractedBlock.id).where(
+            ExtractedBlock.document_id == document_id
+        )
+        return {sequence: block_id for sequence, block_id in self.session.execute(stmt)}
+
+
+class EquationRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def crop_references(self, document_id: uuid.UUID) -> list[str]:
+        stmt = select(Equation.crop_reference).where(
+            Equation.document_id == document_id, Equation.crop_reference.is_not(None)
+        )
+        return [reference for (reference,) in self.session.execute(stmt)]
+
+    def replace_for_document(self, document_id: uuid.UUID, rows: list[dict[str, Any]]) -> None:
+        """Delete the document's equations and insert the new ones. The caller commits.
+
+        Replacing the whole set in one transaction is what makes retries idempotent: there is
+        never a moment with old and new equations side by side, so nothing can be duplicated.
+        """
+        self.session.execute(Equation.__table__.delete().where(Equation.document_id == document_id))
+        for start in range(0, len(rows), _INSERT_BATCH):
+            self.session.execute(
+                insert(Equation),
+                [{"document_id": document_id, **row} for row in rows[start : start + _INSERT_BATCH]],
+            )
+
+    def _filtered(
+        self,
+        document_id: uuid.UUID | None,
+        page_number: int | None,
+        equation_type: str | None,
+        validation_status: str | None,
+    ) -> Any:
+        stmt = select(Equation)
+        if document_id is not None:
+            stmt = stmt.where(Equation.document_id == document_id)
+        if page_number is not None:
+            stmt = stmt.where(Equation.page_number == page_number)
+        if equation_type:
+            stmt = stmt.where(Equation.equation_type == equation_type)
+        if validation_status:
+            stmt = stmt.where(Equation.validation_status == validation_status)
+        return stmt
+
+    def count(
+        self,
+        document_id: uuid.UUID | None = None,
+        *,
+        page_number: int | None = None,
+        equation_type: str | None = None,
+        validation_status: str | None = None,
+    ) -> int:
+        stmt = select(func.count()).select_from(
+            self._filtered(document_id, page_number, equation_type, validation_status).subquery()
+        )
+        return self.session.scalar(stmt) or 0
+
+    def list(
+        self,
+        document_id: uuid.UUID | None = None,
+        *,
+        page_number: int | None = None,
+        equation_type: str | None = None,
+        validation_status: str | None = None,
+        offset: int = 0,
+        limit: int = 20,
+    ) -> list[Equation]:
+        stmt = (
+            self._filtered(document_id, page_number, equation_type, validation_status)
+            .order_by(Equation.document_id, Equation.sequence_number)
+            .offset(offset)
+            .limit(limit)
+        )
         return list(self.session.execute(stmt).scalars().all())

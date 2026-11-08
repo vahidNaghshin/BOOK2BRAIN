@@ -1,15 +1,81 @@
 """Test doubles for OCR and parsers."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from PIL import Image
 
 from app.parsing.base import DocumentParser, Extraction, ProgressCallback
+from app.parsing.equation.equation_ocr import (
+    MathOcrEngine,
+    MathOcrError,
+    MathOcrResult,
+    MathOcrService,
+    MathOcrUnavailableError,
+)
 from app.parsing.errors import OcrPageError, OcrUnavailableError, ParserError
 from app.parsing.models import ContentBlock, ParseStage
 from app.parsing.ocr_service import OcrEngine, OcrPageResult, OcrParagraph
+
+
+class FakeMathEngine(MathOcrEngine):
+    """Scripted math OCR: each call takes the next outcome (a LaTeX string, MathOcrResult or error)."""
+
+    name = "fake"
+
+    def __init__(self, outcomes: Sequence[Any] = (), *, unavailable: str | None = None, default: str = "x = 1") -> None:
+        self.outcomes = list(outcomes)
+        self.unavailable = unavailable
+        self.default = default
+        self.calls = 0
+
+    def check_available(self) -> None:
+        if self.unavailable:
+            raise MathOcrUnavailableError(self.unavailable)
+
+    def recognize(self, image: Image.Image) -> MathOcrResult:
+        self.calls += 1
+        outcome = self.outcomes.pop(0) if self.outcomes else self.default
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome if isinstance(outcome, MathOcrResult) else MathOcrResult(latex=outcome)
+
+
+def math_service(*outcomes: Any, **kwargs: Any) -> MathOcrService:
+    return MathOcrService(FakeMathEngine(outcomes, **kwargs))
+
+
+def formula_item(page: int, box: tuple[float, float, float, float], text: str, orig: str) -> Any:
+    """A stand-in for a Docling formula item. `box` is (l, t, r, b) in BOTTOMLEFT coordinates."""
+    left, top, right, bottom = box
+    return SimpleNamespace(
+        label=SimpleNamespace(value="formula"),
+        text=text,
+        orig=orig,
+        prov=[SimpleNamespace(page_no=page, bbox=SimpleNamespace(l=left, t=top, r=right, b=bottom))],
+    )
+
+
+class FakeFormulaConverter:
+    """Docling converter double for formula enrichment. Records the page ranges it was asked for."""
+
+    def __init__(self, items: Sequence[Any] = (), error: Exception | None = None) -> None:
+        self.items = list(items)
+        self.error = error
+        self.ranges: list[tuple[int, int]] = []
+
+    def factory(self, device: str, dtype: str) -> "FakeFormulaConverter":
+        return self
+
+    def convert(self, path: str, page_range: tuple[int, int]) -> Any:
+        self.ranges.append(page_range)
+        if self.error:
+            raise self.error
+        first, last = page_range
+        wanted = [item for item in self.items if first <= item.prov[0].page_no <= last]
+        return SimpleNamespace(document=SimpleNamespace(iterate_items=lambda: [(item, 0) for item in wanted]))
 
 
 def ocr_result(*paragraphs: str, confidence: float = 90.0) -> OcrPageResult:

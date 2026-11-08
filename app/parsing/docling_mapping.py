@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.parsing.models import BlockType, ContentBlock
+from app.parsing.models import BlockType, ContentBlock, FormulaRegion
 
 _MAX_SECTION_TITLE = 1000
 
@@ -32,6 +32,52 @@ def _location(item: Any, *, index: int, with_pages: bool) -> tuple[int | None, d
     if len(pages) > 1:
         location["pages"] = pages
     return page, location
+
+
+_PICTURE_MAX_HEIGHT = 110.0  # points
+_PICTURE_MIN_ASPECT = 1.5  # width / height
+
+
+def _looks_like_equation_box(bbox: Any) -> bool:
+    """A picture region as small and wide as a displayed equation (a line or two of maths)."""
+    width, height = abs(float(bbox.r) - float(bbox.l)), abs(float(bbox.t) - float(bbox.b))
+    return 0 < height <= _PICTURE_MAX_HEIGHT and width / height >= _PICTURE_MIN_ASPECT
+
+
+def formula_regions_from_docling(document: Any) -> list[FormulaRegion]:
+    """Display-formula regions with page and bounding box, in document order.
+
+    These exist even on scanned pages (layout analysis does not need a text layer), which is
+    what lets equation recognition target only the regions that matter.
+    """
+    regions: list[FormulaRegion] = []
+    for item, _depth in document.iterate_items():
+        label = getattr(getattr(item, "label", None), "value", "")
+        if label not in ("formula", "picture"):
+            continue
+        provenance = getattr(item, "prov", None) or []
+        if not provenance:
+            continue
+        first = provenance[0]
+        bbox = first.bbox
+        if label == "picture" and not _looks_like_equation_box(bbox):
+            continue
+        regions.append(
+            FormulaRegion(
+                page_number=int(first.page_no),
+                bbox={
+                    "l": round(float(bbox.l), 2),
+                    "t": round(float(bbox.t), 2),
+                    "r": round(float(bbox.r), 2),
+                    "b": round(float(bbox.b), 2),
+                    "coord_origin": getattr(bbox.coord_origin, "value", str(bbox.coord_origin)),
+                },
+                docling_ref=item.self_ref,
+                original_text=(getattr(item, "orig", "") or "").strip() or None,
+                candidate=label == "picture",
+            )
+        )
+    return regions
 
 
 def blocks_from_docling(document: Any, *, with_pages: bool) -> list[ContentBlock]:
@@ -70,6 +116,12 @@ def blocks_from_docling(document: Any, *, with_pages: bool) -> list[ContentBlock
                     metadata["marker"] = item.marker
             elif label == "caption":
                 block_type = BlockType.CAPTION
+            elif label == "formula":
+                # LaTeX when formula enrichment ran, otherwise the PDF's own text (may be empty
+                # for scanned pages). Equation extraction produces the structured LaTeX record.
+                block_type = BlockType.EQUATION
+                text = text or getattr(item, "orig", "") or ""
+                metadata = {"docling_label": "formula"}
             elif label in ("text", "paragraph"):
                 block_type = BlockType.PARAGRAPH
             else:

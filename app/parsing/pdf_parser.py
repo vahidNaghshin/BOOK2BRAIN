@@ -1,11 +1,11 @@
 import logging
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from app.config import Settings
 from app.parsing.base import DocumentParser, Extraction, ProgressCallback
@@ -18,6 +18,7 @@ from app.parsing.errors import (
 from app.parsing.models import (
     BlockType,
     ContentBlock,
+    FormulaRegion,
     OcrSummary,
     ParseStage,
     ParsingIssue,
@@ -28,9 +29,24 @@ from app.parsing.scan_detection import decide_ocr, measure_text
 logger = logging.getLogger(__name__)
 
 
-def _render_page(pdf_page: Any, dpi: int) -> Image.Image:
+def _render_page(pdf_page: Any, dpi: int, mask_regions: Sequence[FormulaRegion] = ()) -> Image.Image:
+    """Render a page for OCR. `mask_regions` (formulas) are whited out so OCR does not turn
+    equations into garbled text; they are recognised by the equation layer instead."""
     pixmap = pdf_page.get_pixmap(dpi=dpi, alpha=False)
-    return Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
+    image = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
+    if mask_regions:
+        scale, height, pad = dpi / 72, pdf_page.rect.height, 4
+        draw = ImageDraw.Draw(image)
+        for region in mask_regions:
+            box = region.bbox
+            if str(box.get("coord_origin", "")).upper() == "TOPLEFT":
+                top, bottom = box["t"] * scale, box["b"] * scale
+            else:  # PDF coordinates: origin at the bottom-left of the page
+                top, bottom = (height - box["t"]) * scale, (height - box["b"]) * scale
+            draw.rectangle(
+                [box["l"] * scale - pad, top - pad, box["r"] * scale + pad, bottom + pad], fill="white"
+            )
+    return image
 
 
 def _alnum_count(text: str) -> int:
@@ -76,7 +92,7 @@ class PdfParser(DocumentParser):
             partial = False
 
             on_progress(ParseStage.PARSING, 0, 1)
-            digital_blocks, convert_warnings, convert_partial = self._convert(path)
+            digital_blocks, convert_warnings, convert_partial, formula_regions = self._convert(path)
             warnings.extend(convert_warnings)
             partial = partial or convert_partial
             on_progress(ParseStage.PARSING, 1, 1)
@@ -87,7 +103,7 @@ class PdfParser(DocumentParser):
 
             if ocr_pages:
                 ocr_summary, ocr_warnings, ocr_partial = self._run_ocr(
-                    pdf, blocks_by_page, ocr_pages, on_progress
+                    pdf, blocks_by_page, ocr_pages, on_progress, formula_regions
                 )
                 warnings.extend(ocr_warnings)
                 partial = partial or ocr_partial
@@ -100,6 +116,7 @@ class PdfParser(DocumentParser):
                 ocr=ocr_summary,
                 partial=partial,
                 metadata={"pages_without_content": empty_pages},
+                formula_regions=[r for r in formula_regions if 1 <= r.page_number <= page_count],
             )
         finally:
             pdf.close()
@@ -124,10 +141,12 @@ class PdfParser(DocumentParser):
             raise EmptyDocumentError("The PDF has no pages.", details={"page_count": 0})
         return pdf
 
-    def _convert(self, path: Path) -> tuple[list[ContentBlock], list[ParsingIssue], bool]:
+    def _convert(
+        self, path: Path
+    ) -> tuple[list[ContentBlock], list[ParsingIssue], bool, list[FormulaRegion]]:
         from docling.exceptions import ConversionError
 
-        from app.parsing.docling_mapping import blocks_from_docling
+        from app.parsing.docling_mapping import blocks_from_docling, formula_regions_from_docling
         from app.parsing.docling_support import get_pdf_converter
 
         converter = (self._converter_factory or get_pdf_converter)()
@@ -152,7 +171,12 @@ class PdfParser(DocumentParser):
                     message="Docling could only convert part of this PDF; some content may be missing.",
                 )
             )
-        return blocks_from_docling(result.document, with_pages=True), warnings, partial
+        regions = (
+            formula_regions_from_docling(result.document)
+            if hasattr(result.document, "iterate_items")
+            else []
+        )
+        return blocks_from_docling(result.document, with_pages=True), warnings, partial, regions
 
     # -- page assessment and OCR ---------------------------------------------------
 
@@ -195,6 +219,7 @@ class PdfParser(DocumentParser):
         blocks_by_page: dict[int, list[ContentBlock]],
         ocr_pages: dict[int, str],
         on_progress: ProgressCallback,
+        formula_regions: Sequence[FormulaRegion] = (),
     ) -> tuple[OcrSummary | None, list[ParsingIssue], bool]:
         pages = sorted(ocr_pages)
         settings = self.settings
@@ -229,9 +254,14 @@ class PdfParser(DocumentParser):
                 on_progress(ParseStage.OCR, done - 1, len(pages))
             digital = blocks_by_page.get(page_number, [])
             digital_chars = _alnum_count("\n".join(block.text for block in digital))
+            mask = (
+                [r for r in formula_regions if r.page_number == page_number and not r.candidate]
+                if settings.equation_extraction_enabled
+                else []
+            )
             try:
                 result = self.ocr_service.recognize(
-                    _render_page(pdf[page_number - 1], settings.ocr_dpi)
+                    _render_page(pdf[page_number - 1], settings.ocr_dpi, mask)
                 )
             except OcrPageError as exc:
                 logger.warning("OCR failed on page %d: %s", page_number, exc)

@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -34,6 +35,24 @@ class Settings(BaseSettings):
     ocr_min_confidence: float = Field(default=30.0, ge=0, le=100)
     ocr_page_timeout_seconds: int = Field(default=120, ge=1)
     ocr_dehyphenate: bool = True
+
+    # Equation extraction
+    equation_extraction_enabled: bool = True
+    # Docling's formula model (LaTeX from the page image). Slow, so it only runs on pages
+    # that contain formulas. cpu/float32 was ~13x faster than Docling's default on test hardware.
+    formula_enrichment_enabled: bool = True
+    formula_enrichment_device: str = "cpu"
+    formula_enrichment_dtype: str = "float32"
+    # Fallback for formula regions the primary route could not recover (and for EPUB images).
+    math_ocr_enabled: bool = True
+    math_ocr_engine: Literal["docling", "pix2text"] = "docling"
+    # Recognition confidence (0-1) below which a result is flagged "uncertain".
+    equation_min_confidence: float = Field(default=0.70, ge=0, le=1)
+    equation_store_crops: bool = True
+    equation_crop_dpi: int = Field(default=200, ge=72, le=600)
+    # Try math OCR on small, wide picture regions (layout analysis often calls equations that).
+    equation_scan_pictures: bool = True
+    equation_scan_pictures_max: int = Field(default=300, ge=0)
 
     @field_validator("storage_root")
     @classmethod

@@ -5,6 +5,7 @@ from typing import Any
 from app.parsing.base import DocumentParser, Extraction, ProgressCallback
 from app.parsing.errors import CorruptDocumentError
 from app.parsing.models import ParseStage, ParsingIssue
+from app.parsing.omml import readable_docx
 
 
 class DocxParser(DocumentParser):
@@ -24,18 +25,23 @@ class DocxParser(DocumentParser):
 
         on_progress(ParseStage.PARSING, 0, 1)
         converter = (self._converter_factory or get_docx_converter)()
-        try:
-            result = converter.convert(str(path))
-        except ConversionError as exc:
-            raise CorruptDocumentError(
-                "The DOCX file is corrupted or not a valid Word document.",
-                details={"reason": str(exc)[:500]},
-            ) from exc
+        # One malformed equation would otherwise make Docling fail the whole document.
+        with readable_docx(path) as (readable_path, equation_issues):
+            try:
+                result = converter.convert(str(readable_path))
+            except ConversionError as exc:
+                raise CorruptDocumentError(
+                    "The DOCX file is corrupted or not a valid Word document.",
+                    details={"reason": str(exc)[:500]},
+                ) from exc
 
         warnings = [
             ParsingIssue(code="docling_warning", message=str(error.error_message)[:500])
             for error in getattr(result, "errors", [])
         ]
+        warnings.extend(equation_issues)
         blocks = blocks_from_docling(result.document, with_pages=False)
         on_progress(ParseStage.PARSING, 1, 1)
-        return Extraction(blocks=blocks, page_count=None, warnings=warnings)
+        return Extraction(
+            blocks=blocks, page_count=None, warnings=warnings, partial=bool(equation_issues)
+        )

@@ -13,6 +13,7 @@ class BlockType(enum.StrEnum):
     TABLE = "table"
     LIST = "list"
     CAPTION = "caption"
+    EQUATION = "equation"
     OTHER = "other"
 
 
@@ -51,6 +52,23 @@ class ContentBlock(BaseModel):
     raw_text: str | None = None
 
 
+class FormulaRegion(BaseModel):
+    """A display-formula region found by layout analysis (PDF), with or without text.
+
+    On a scanned page the region has no text at all; its position is what matters.
+    """
+
+    page_number: int
+    # Position on the page in PDF points: l, t, r, b and coord_origin ("BOTTOMLEFT").
+    bbox: dict[str, Any]
+    docling_ref: str | None = None
+    original_text: str | None = None  # the PDF's own text for the region, if it has a text layer
+    # True for a small wide region that layout analysis called a *picture*. Layout analysis often
+    # labels real equations that way, so these are tried with math OCR and kept only if the
+    # result looks like mathematics.
+    candidate: bool = False
+
+
 class OcrSummary(BaseModel):
     engine: str
     language: str
@@ -75,6 +93,8 @@ class ParsingResult(BaseModel):
     ocr: OcrSummary | None = None
     # Format-specific extras (e.g. EPUB title, number of spine items).
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # PDF layout analysis: where display formulas are (used by equation extraction).
+    formula_regions: list[FormulaRegion] = Field(default_factory=list)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

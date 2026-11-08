@@ -24,7 +24,7 @@ from app.services.document_service import DocumentService
 from app.services.storage_service import LocalStorage
 from database.connection import build_engine
 
-TABLES = "extracted_blocks, processing_errors, processing_runs, documents, books"
+TABLES = "equations, extracted_blocks, processing_errors, processing_runs, documents, books"
 
 
 def derive_test_url(suffix: str = "_test") -> str:

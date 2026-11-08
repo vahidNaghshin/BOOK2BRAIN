@@ -203,3 +203,152 @@ def make_docx_with_broken_xml() -> bytes:
         archive.writestr("[Content_Types].xml", "<Types")
         archive.writestr("word/document.xml", "<w:document><unclosed>")
     return buffer.getvalue()
+
+
+# -- Word equations (OMML) -------------------------------------------------------------
+
+_M = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+
+def _r(text: str) -> str:
+    return f"<m:r><m:t>{text}</m:t></m:r>"
+
+
+def _sup(base: str, exponent: str) -> str:
+    return f"<m:sSup><m:e>{_r(base)}</m:e><m:sup>{_r(exponent)}</m:sup></m:sSup>"
+
+
+def _frac(numerator: str, denominator: str) -> str:
+    return f"<m:f><m:num>{numerator}</m:num><m:den>{denominator}</m:den></m:f>"
+
+
+OMML_SNIPPETS: dict[str, str] = {
+    "force": _r("F=ma"),
+    "energy": _r("E=") + _r("m") + _sup("c", "2"),
+    "kinetic": _r("KE=") + _frac(_r("1"), _r("2")) + _r("m") + _sup("v", "2"),
+    "integral": (
+        "<m:nary><m:naryPr><m:chr m:val=\"∫\"/></m:naryPr><m:sub>" + _r("0") + "</m:sub><m:sup>"
+        + _r("1") + "</m:sup><m:e>" + _r("x") + _r("dx") + "</m:e></m:nary>"
+    ),
+    "sum": (
+        "<m:nary><m:naryPr><m:chr m:val=\"∑\"/></m:naryPr><m:sub>" + _r("i=1") + "</m:sub><m:sup>"
+        + _r("n") + "</m:sup><m:e>" + _r("i") + "</m:e></m:nary>"
+    ),
+    "matrix": (
+        _r("A=") + "<m:d><m:dPr/><m:e><m:m>"
+        + "<m:mr><m:e>" + _r("a") + "</m:e><m:e>" + _r("b") + "</m:e></m:mr>"
+        + "<m:mr><m:e>" + _r("c") + "</m:e><m:e>" + _r("d") + "</m:e></m:mr>"
+        + "</m:m></m:e></m:d>"
+    ),
+    "sqrt": "<m:rad><m:radPr><m:degHide m:val=\"1\"/></m:radPr><m:deg/><m:e>" + _r("a") + _sup("b", "2") + "</m:e></m:rad>",
+    "greek": _r("α") + "<m:sSub><m:e>" + _r("x") + "</m:e><m:sub>" + _r("i") + "</m:sub></m:sSub>",
+    # Valid per the schema, but Docling's converter raises KeyError on it.
+    "malformed": "<m:d><m:dPr/>" + _r("a") + "</m:d>",
+}
+
+
+def make_docx_with_equations(items: Sequence[tuple]) -> bytes:
+    """A DOCX built from items, using real OMML:
+
+    ("heading", text) · ("paragraph", text) · ("inline", before, key, after) ·
+    ("display", key) · ("display", key, "(1.1)")   [number as separate text]
+    `key` indexes OMML_SNIPPETS.
+    """
+    from lxml import etree
+
+    def omml(inner: str) -> etree._Element:
+        return etree.fromstring(f'<m:oMath xmlns:m="{_M}" xmlns:w="{_W}">{inner}</m:oMath>')
+
+    document = docx.Document()
+    for kind, *rest in items:
+        if kind == "heading":
+            document.add_heading(rest[0], 1)
+        elif kind == "paragraph":
+            document.add_paragraph(rest[0])
+        elif kind == "inline":
+            before, key, after = rest
+            paragraph = document.add_paragraph(before)
+            paragraph._p.append(omml(OMML_SNIPPETS[key]))
+            paragraph.add_run(after)
+        elif kind == "display":
+            paragraph = document.add_paragraph()
+            etree.SubElement(paragraph._p, f"{{{_M}}}oMathPara").append(omml(OMML_SNIPPETS[rest[0]]))
+            if len(rest) > 1:
+                paragraph.add_run(rest[1])
+        else:
+            raise ValueError(kind)
+    buffer = io.BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
+# -- Mathematical PDFs (ground-truth LaTeX rendered with matplotlib's mathtext) ----------
+
+# (category, LaTeX). Written for matplotlib's mathtext, which has no matrix environments.
+MATH_CORPUS: list[tuple[str, str]] = [
+    ("algebra", r"x^{2} + 2x + 1 = 0"),
+    ("algebra", r"x = \frac{-b \pm \sqrt{b^{2} - 4ac}}{2a}"),
+    ("algebra", r"\frac{a + b}{c - d} = \sqrt{x^{2} + y^{2}}"),
+    ("calculus", r"\int_{0}^{\infty} e^{-x^{2}} dx = \frac{\sqrt{\pi}}{2}"),
+    ("calculus", r"\lim_{x \to 0} \frac{\sin x}{x} = 1"),
+    ("differential", r"\frac{dy}{dx} + y = 0"),
+    ("differential", r"\frac{\partial f}{\partial x} = 2x"),
+    ("series", r"\sum_{n=1}^{\infty} \frac{1}{n^{2}} = \frac{\pi^{2}}{6}"),
+    ("series", r"\prod_{k=1}^{n} k = n!"),
+    ("greek", r"\alpha + \beta = \gamma \cdot \delta"),
+    ("physics", r"F = ma"),
+    ("physics", r"E = mc^{2}"),
+    ("statistics", r"\sigma^{2} = \frac{1}{N} \sum_{i=1}^{N} (x_{i} - \mu)^{2}"),
+    ("probability", r"P(A|B) = \frac{P(B|A) P(A)}{P(B)}"),
+    ("finance", r"A = P \left(1 + \frac{r}{n}\right)^{nt}"),
+    ("logic", r"A \cup B = \{x : x \in A \vee x \in B\}"),
+    ("vector", r"\vec{F} = m \vec{a}"),
+    ("chemistry", r"2 H_{2} + O_{2} \rightarrow 2 H_{2}O"),
+    ("optimization", r"\min_{x} f(x) = x^{2} + 1"),
+    ("engineering", r"V = I R + L \frac{dI}{dt}"),
+]
+
+
+def make_math_pdf(
+    equations: Sequence[str],
+    *,
+    per_page: int = 5,
+    scanned: bool = False,
+    with_text: bool = True,
+) -> bytes:
+    """A book-like PDF: a heading, explanatory text and display equations (one per paragraph).
+
+    Equations are real mathtext glyphs (digital) or, with `scanned=True`, only an image of each
+    page. Returns the PDF bytes.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    document = pymupdf.open()
+    for start in range(0, len(equations), per_page):
+        fig = plt.figure(figsize=(8.27, 11.69))
+        fig.text(0.1, 0.93, "Chapter 3: Worked relations", fontsize=20, family="serif")
+        y = 0.86
+        for latex in equations[start : start + per_page]:
+            if with_text:
+                fig.text(0.1, y, "The following relation is used throughout this section:", fontsize=11, family="serif")
+                y -= 0.06
+            fig.text(0.5, y, f"${latex}$", fontsize=18, ha="center")
+            y -= 0.1
+            if with_text:
+                fig.text(0.1, y, "where the symbols have their usual meaning.", fontsize=11, family="serif")
+                y -= 0.07
+        buffer = io.BytesIO()
+        fig.savefig(buffer, format="pdf")
+        plt.close(fig)
+        page_pdf = pymupdf.open(stream=buffer.getvalue(), filetype="pdf")
+        if scanned:
+            pixmap = page_pdf[0].get_pixmap(dpi=200)
+            page = document.new_page(width=page_pdf[0].rect.width, height=page_pdf[0].rect.height)
+            page.insert_image(page.rect, pixmap=pixmap)
+        else:
+            document.insert_pdf(page_pdf)
+    return document.tobytes()

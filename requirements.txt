@@ -14,4 +14,9 @@ python-dotenv
 pymupdf>=2.1,<3
 pytesseract>=0.3.13,<0.4
 Pillow>=10.1
+# Equation extraction (already installed with Docling; listed because the app imports them directly)
+pylatexenc>=2.10,<3
+latex2mathml>=3.77,<4
 pytest
+# Test fixtures only: renders ground-truth equations into PDFs
+matplotlib>=3.8

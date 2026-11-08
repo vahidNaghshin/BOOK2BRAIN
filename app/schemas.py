@@ -142,6 +142,9 @@ class ProcessingRunRead(BaseModel):
     completed_at: datetime | None
     error_message: str | None
     created_at: datetime
+    # Equation extraction has its own status; it never changes the run or document status.
+    equation_status: str = "not_started"
+    equation_summary: dict[str, Any] | None = None
     summary: ProcessingSummary | None = None
 
 
@@ -163,6 +166,7 @@ class ProcessingInfo(BaseModel):
     errors: list[ProcessingErrorRead] = Field(default_factory=list)
     run_count: int = 0
     is_stale: bool = False
+    equation_is_stale: bool = False
 
 
 class ExtractedBlockRead(BaseModel):
@@ -179,5 +183,36 @@ class ExtractedBlockRead(BaseModel):
     # The ORM attribute is `block_metadata` ("metadata" is reserved on declarative classes).
     metadata: dict[str, Any] | None = Field(
         default=None, validation_alias=AliasChoices("block_metadata", "metadata")
+    )
+    created_at: datetime
+
+
+class EquationRead(BaseModel):
+    """A stored equation, for display. `latex` is normalized; `original_latex` is as extracted."""
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: uuid.UUID
+    document_id: uuid.UUID
+    extracted_block_id: uuid.UUID | None
+    sequence_number: int
+    latex: str
+    original_latex: str | None
+    plain_text: str | None
+    equation_type: str
+    equation_category: str | None
+    equation_number: str | None
+    page_number: int | None
+    section_title: str | None
+    surrounding_text: str | None
+    source_location: dict[str, Any] | None
+    bounding_box: dict[str, Any] | None
+    crop_reference: str | None
+    extraction_method: str
+    confidence: float | None
+    validation_status: str
+    validation_warnings: list[str] | None
+    metadata: dict[str, Any] | None = Field(
+        default=None, validation_alias=AliasChoices("equation_metadata", "metadata")
     )
     created_at: datetime

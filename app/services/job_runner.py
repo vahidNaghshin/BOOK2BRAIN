@@ -7,8 +7,10 @@ from contextlib import AbstractContextManager
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
+from app.parsing.equation.equation_service import EquationService
 from app.parsing.parser_factory import ParserFactory
 from app.services.document_processing_service import DocumentProcessingService
+from app.services.errors import ProcessingNotAllowedError
 from app.services.storage_service import StorageBackend, get_storage
 from database.connection import session_scope
 
@@ -30,17 +32,19 @@ class ProcessingJobRunner:
         session_factory: Callable[[], AbstractContextManager[Session]] = session_scope,
         storage: StorageBackend | None = None,
         parser_factory: ParserFactory | None = None,
+        equation_service: EquationService | None = None,
         max_workers: int = 1,
     ) -> None:
         self.settings = settings or get_settings()
         self._session_factory = session_factory
         self._storage = storage or get_storage(self.settings)
         self._parser_factory = parser_factory
+        self._equation_service = equation_service
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="processing")
 
     def _service(self, session: Session) -> DocumentProcessingService:
         return DocumentProcessingService(
-            session, self._storage, self.settings, self._parser_factory
+            session, self._storage, self.settings, self._parser_factory, self._equation_service
         )
 
     def submit(self, document_id: uuid.UUID) -> uuid.UUID:
@@ -48,6 +52,27 @@ class ProcessingJobRunner:
             run_id = self._service(session).start(document_id)
         self._executor.submit(self._run, run_id)
         return run_id
+
+    def submit_equations(self, document_id: uuid.UUID) -> None:
+        """Queue equation extraction for an already processed document."""
+        with self._session_factory() as session:
+            service = self._service(session)
+            info = service.get_info(document_id)
+            run = info.latest_run
+            if info.document_status != "completed" or run is None:
+                raise ProcessingNotAllowedError(
+                    "The document text must be processed before equations can be extracted."
+                )
+            if run.equation_status == "processing" and not info.equation_is_stale:
+                raise ProcessingNotAllowedError("Equations are already being extracted for this document.")
+        self._executor.submit(self._run_equations, document_id)
+
+    def _run_equations(self, document_id: uuid.UUID) -> None:
+        try:
+            with self._session_factory() as session:
+                self._service(session).retry_equations(document_id)
+        except Exception:
+            logger.exception("Background equation extraction for %s crashed", document_id)
 
     def _run(self, run_id: uuid.UUID) -> None:
         try:

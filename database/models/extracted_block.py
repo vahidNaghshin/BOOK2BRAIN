@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from database.models.document import Document
 
 # Must match app.parsing.models.BlockType (a test enforces this).
-BLOCK_TYPES = ("paragraph", "heading", "table", "list", "caption", "other")
+BLOCK_TYPES = ("paragraph", "heading", "table", "list", "caption", "equation", "other")
 
 
 class ExtractedBlock(UUIDPrimaryKeyMixin, Base):
