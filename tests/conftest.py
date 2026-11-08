@@ -6,6 +6,7 @@ migrations. The production database is never touched.
 """
 
 import os
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from app.services.document_service import DocumentService
 from app.services.storage_service import LocalStorage
 from database.connection import build_engine
 
-TABLES = "processing_errors, processing_runs, documents, books"
+TABLES = "extracted_blocks, processing_errors, processing_runs, documents, books"
 
 
 def derive_test_url(suffix: str = "_test") -> str:
@@ -118,6 +119,37 @@ def document_service(session: Session, storage: LocalStorage, settings: Settings
 @pytest.fixture
 def metadata() -> BookMetadata:
     return BookMetadata(title="Dune", author="Frank Herbert")
+
+
+@pytest.fixture(scope="session")
+def docling_ready() -> None:
+    """Skip tests that need real Docling PDF models when they cannot be loaded (e.g. offline)."""
+    import pymupdf
+
+    from app.parsing.docling_support import get_pdf_converter
+
+    document = pymupdf.open()
+    document.new_page().insert_text((72, 72), "Docling availability probe text.")
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "probe.pdf"
+        path.write_bytes(document.tobytes())
+        try:
+            get_pdf_converter().convert(str(path))
+        except Exception as exc:
+            pytest.skip(
+                f"Docling models are not available ({type(exc).__name__}). "
+                "See the README section 'Docling models'."
+            )
+
+
+@pytest.fixture
+def parsing_settings(tmp_path: Path) -> Settings:
+    """Settings for parser tests that need no database."""
+    return Settings(
+        database_url="postgresql+psycopg://unused:unused@localhost/unused",
+        storage_root=tmp_path / "storage",
+        _env_file=None,
+    )
 
 
 def stored_files(root: Path) -> list[Path]:

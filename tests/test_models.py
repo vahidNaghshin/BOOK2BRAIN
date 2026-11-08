@@ -2,16 +2,20 @@ import uuid
 from datetime import timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.parsing.models import BlockType
 from database.models import (
+    BLOCK_TYPES,
     Book,
     Document,
+    ExtractedBlock,
     ProcessingError,
     ProcessingRun,
     ProcessingRunStatus,
+    ProcessingStage,
     ProcessingStatus,
 )
 
@@ -202,5 +206,132 @@ def test_document_requires_existing_book(session: Session) -> None:
         sha256_hash="b" * 64,
     )
     session.add(orphan)
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+# -- Day 3: extracted blocks and processing run progress -------------------------------
+
+
+def make_block(document: Document, sequence: int = 0, **overrides) -> ExtractedBlock:
+    values = {
+        "document": document,
+        "sequence_number": sequence,
+        "block_type": "paragraph",
+        "text": f"Block {sequence} text.",
+    }
+    values.update(overrides)
+    return ExtractedBlock(**values)
+
+
+def test_block_types_in_the_database_match_the_parser_enum() -> None:
+    assert set(BLOCK_TYPES) == {member.value for member in BlockType}
+
+
+def test_extracted_blocks_belong_to_a_document_in_sequence_order(session: Session) -> None:
+    document = make_document(make_book())
+    session.add_all([document, make_block(document, 2), make_block(document, 0), make_block(document, 1)])
+    session.commit()
+
+    session.expire_all()
+    saved = session.scalars(select(Document)).one()
+    assert [b.sequence_number for b in saved.extracted_blocks] == [0, 1, 2]
+    assert all(b.document is saved for b in saved.extracted_blocks)
+    assert isinstance(saved.extracted_blocks[0].id, uuid.UUID)
+    assert saved.extracted_blocks[0].created_at.utcoffset() == timedelta(0)
+
+
+def test_extracted_block_stores_json_and_optional_fields(session: Session) -> None:
+    document = make_document(make_book())
+    session.add(
+        make_block(
+            document,
+            page_number=12,
+            section_title="Chapter 1",
+            raw_text="Original  text",
+            source_location={"page": 12, "bbox": [1.5, 2.5, 3.5, 4.5]},
+            block_metadata={"heading_level": 2, "nested": {"ok": True}},
+        )
+    )
+    session.commit()
+
+    session.expire_all()
+    saved = session.scalars(select(ExtractedBlock)).one()
+    assert saved.page_number == 12 and saved.section_title == "Chapter 1"
+    assert saved.raw_text == "Original  text"
+    assert saved.source_location == {"page": 12, "bbox": [1.5, 2.5, 3.5, 4.5]}
+    assert saved.block_metadata == {"heading_level": 2, "nested": {"ok": True}}
+
+
+def test_extracted_block_optional_fields_default_to_null(session: Session) -> None:
+    session.add(make_block(make_document(make_book())))
+    session.commit()
+
+    saved = session.scalars(select(ExtractedBlock)).one()
+    assert saved.page_number is None and saved.raw_text is None and saved.section_title is None
+    assert saved.source_location is None and saved.block_metadata is None
+
+
+def test_the_metadata_column_has_the_requested_name(engine) -> None:
+    columns = {column["name"] for column in inspect(engine).get_columns("extracted_blocks")}
+
+    assert {"id", "document_id", "sequence_number", "block_type", "text", "raw_text", "page_number",
+            "section_title", "source_location", "metadata", "created_at"} <= columns
+
+
+def test_sequence_numbers_are_unique_per_document(session: Session) -> None:
+    first, second = make_document(make_book("A")), make_document(make_book("B"))
+    session.add_all([first, second, make_block(first, 0), make_block(second, 0)])
+    session.commit()  # the same sequence number in different documents is fine
+
+    session.add(make_block(first, 0))
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [{"block_type": "bogus"}, {"page_number": 0}, {"page_number": -3}, {"sequence_number": -1}],
+    ids=["invalid-type", "page-zero", "page-negative", "negative-sequence"],
+)
+def test_extracted_block_check_constraints(session: Session, overrides: dict) -> None:
+    session.add(make_block(make_document(make_book()), **{"sequence_number": 0, **overrides}))
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+def test_deleting_a_document_deletes_its_blocks(session: Session) -> None:
+    book = make_book()
+    document = make_document(book)
+    session.add_all([book, document, make_block(document, 0), make_block(document, 1)])
+    session.commit()
+
+    session.delete(document)
+    session.commit()
+
+    assert session.scalars(select(ExtractedBlock)).all() == []
+
+
+def test_processing_run_progress_columns_default_to_null_and_store_a_summary(session: Session) -> None:
+    document = make_document(make_book())
+    run = ProcessingRun(document=document)
+    session.add_all([document, run])
+    session.commit()
+    assert (run.stage, run.progress_current, run.progress_total, run.result_summary) == (None, None, None, None)
+
+    run.stage = ProcessingStage.OCR.value
+    run.progress_current, run.progress_total = 3, 10
+    run.result_summary = {"page_count": 10, "warnings": []}
+    session.commit()
+
+    session.expire_all()
+    saved = session.scalars(select(ProcessingRun)).one()
+    assert (saved.stage, saved.progress_current, saved.progress_total) == ("ocr", 3, 10)
+    assert saved.result_summary == {"page_count": 10, "warnings": []}
+
+
+def test_processing_run_stage_constraint(session: Session) -> None:
+    document = make_document(make_book())
+    session.add_all([document, ProcessingRun(document=document, stage="bogus")])
     with pytest.raises(IntegrityError):
         session.commit()

@@ -11,7 +11,7 @@ from database.connection import build_engine
 from database.models import Base
 from tests.conftest import alembic_config, derive_test_url, ensure_database, migrate
 
-EXPECTED_TABLES = {"books", "documents", "processing_runs", "processing_errors"}
+EXPECTED_TABLES = {"books", "documents", "processing_runs", "processing_errors", "extracted_blocks"}
 
 
 @pytest.fixture

@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +22,14 @@ class ProcessingRunStatus(enum.StrEnum):
     FAILED = "failed"
 
 
+class ProcessingStage(enum.StrEnum):
+    """Where a run currently is (or was when it failed). Status says whether it is running."""
+
+    PARSING = "parsing"
+    OCR = "ocr"
+    NORMALIZING = "normalizing"
+
+
 class ProcessingRun(UUIDPrimaryKeyMixin, Base):
     """One processing attempt for a document."""
 
@@ -36,9 +44,14 @@ class ProcessingRun(UUIDPrimaryKeyMixin, Base):
         server_default=ProcessingRunStatus.PENDING.value,
         index=True,
     )
+    stage: Mapped[str | None] = mapped_column(String(20))
+    progress_current: Mapped[int | None] = mapped_column(Integer)
+    progress_total: Mapped[int | None] = mapped_column(Integer)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_message: Mapped[str | None] = mapped_column(Text)
+    # Extraction summary (page count, OCR pages, warnings...) for completed runs.
+    result_summary: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, server_default=func.now()
     )
@@ -54,6 +67,10 @@ class ProcessingRun(UUIDPrimaryKeyMixin, Base):
             + ", ".join(f"'{member.value}'" for member in ProcessingRunStatus)
             + ")",
             name="status_valid",
+        ),
+        CheckConstraint(
+            "stage IN (" + ", ".join(f"'{member.value}'" for member in ProcessingStage) + ")",
+            name="stage_valid",
         ),
     )
 

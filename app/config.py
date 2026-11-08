@@ -21,6 +21,20 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = Field(default=100, ge=1)
     log_level: str = "INFO"
 
+    # Document processing
+    min_content_characters: int = Field(default=20, ge=1)
+    processing_stale_minutes: int = Field(default=120, ge=1)
+
+    # OCR (Tesseract) and scanned-page detection
+    ocr_enabled: bool = True
+    ocr_language: str = "eng"
+    ocr_dpi: int = Field(default=300, ge=72, le=600)
+    ocr_min_text_chars: int = Field(default=25, ge=0)
+    ocr_max_garbled_ratio: float = Field(default=0.3, ge=0, le=1)
+    ocr_min_confidence: float = Field(default=30.0, ge=0, le=100)
+    ocr_page_timeout_seconds: int = Field(default=120, ge=1)
+    ocr_dehyphenate: bool = True
+
     @field_validator("storage_root")
     @classmethod
     def _resolve_storage_root(cls, value: Path) -> Path:

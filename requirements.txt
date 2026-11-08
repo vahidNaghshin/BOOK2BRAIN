@@ -1,7 +1,9 @@
 streamlit
-docling
-ebooklib
-beautifulsoup4
+# Document parsing and OCR (versions verified in Day 3)
+docling>=2.148,<3
+ebooklib>=0.21,<0.22
+beautifulsoup4>=4.12
+lxml>=5
 psycopg[binary]
 sqlalchemy
 alembic
@@ -9,7 +11,7 @@ pgvector
 pydantic
 pydantic-settings
 python-dotenv
-pymupdf
-pytesseract
-Pillow
+pymupdf>=2.1,<3
+pytesseract>=0.3.13,<0.4
+Pillow>=10.1
 pytest

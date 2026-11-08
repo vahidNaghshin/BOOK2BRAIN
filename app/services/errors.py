@@ -37,3 +37,15 @@ class StorageError(UploadError):
 
 class UploadFailedError(UploadError):
     """Unexpected failure; nothing was saved. Details are in the logs."""
+
+
+class ProcessingServiceError(Exception):
+    """Base class for document-processing errors. The message is safe to show to users."""
+
+
+class DocumentNotFoundError(ProcessingServiceError):
+    pass
+
+
+class ProcessingNotAllowedError(ProcessingServiceError):
+    """The document is in a state that does not allow starting processing."""

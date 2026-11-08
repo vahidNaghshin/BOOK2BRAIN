@@ -2,15 +2,18 @@ import re
 import unicodedata
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
     StringConstraints,
     field_validator,
 )
+
+from app.parsing.models import ExtractionStatus, OcrSummary, ParsingIssue
 
 _WHITESPACE = re.compile(r"\s+")
 
@@ -110,3 +113,71 @@ class UploadResult(BaseModel):
     book: BookRead
     document: DocumentRead
     book_created: bool
+
+
+class ProcessingSummary(BaseModel):
+    """What a completed run extracted. Stored as JSON on the processing run."""
+
+    extraction_method: str
+    status: ExtractionStatus
+    extracted_at: datetime
+    page_count: int | None = None
+    character_count: int
+    block_count: int
+    ocr: OcrSummary | None = None
+    warnings: list[ParsingIssue] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProcessingRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    document_id: uuid.UUID
+    status: str
+    stage: str | None
+    progress_current: int | None
+    progress_total: int | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    error_message: str | None
+    created_at: datetime
+    summary: ProcessingSummary | None = None
+
+
+class ProcessingErrorRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    processing_run_id: uuid.UUID | None
+    error_type: str
+    error_message: str
+    details: dict[str, Any] | None
+    created_at: datetime
+
+
+class ProcessingInfo(BaseModel):
+    document_id: uuid.UUID
+    document_status: str
+    latest_run: ProcessingRunRead | None = None
+    errors: list[ProcessingErrorRead] = Field(default_factory=list)
+    run_count: int = 0
+    is_stale: bool = False
+
+
+class ExtractedBlockRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: uuid.UUID
+    sequence_number: int
+    block_type: str
+    text: str
+    raw_text: str | None
+    page_number: int | None
+    section_title: str | None
+    source_location: dict[str, Any] | None
+    # The ORM attribute is `block_metadata` ("metadata" is reserved on declarative classes).
+    metadata: dict[str, Any] | None = Field(
+        default=None, validation_alias=AliasChoices("block_metadata", "metadata")
+    )
+    created_at: datetime

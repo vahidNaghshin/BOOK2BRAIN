@@ -10,6 +10,7 @@ from app import __version__
 from app.config import get_settings
 from app.logging_config import configure_logging
 from app.ui.library import render_library_page
+from app.ui.processing import render_processing_page
 from app.ui.upload import render_upload_page
 from database.connection import check_connection
 
@@ -27,11 +28,6 @@ def render_header() -> None:
         st.error(f"Database not connected: {detail}")
 
 
-def render_processing() -> None:
-    st.header("Processing status")
-    st.info("Processing status placeholder. Ingestion progress will be shown here.")
-
-
 try:
     configure_logging(get_settings().log_level)
 except ValidationError:
@@ -43,10 +39,10 @@ except ValidationError:
     st.stop()
 
 render_header()
-upload_tab, library_tab, processing_tab = st.tabs(["Upload", "Library", "Processing status"])
+upload_tab, library_tab, processing_tab = st.tabs(["Upload", "Library", "Processing"])
 with upload_tab:
     render_upload_page()
 with library_tab:
     render_library_page()
 with processing_tab:
-    render_processing()
+    render_processing_page()

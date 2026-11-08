@@ -11,6 +11,7 @@ from database.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from database.models.book import Book
+    from database.models.extracted_block import ExtractedBlock
     from database.models.processing import ProcessingError, ProcessingRun
 
 
@@ -62,6 +63,12 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="ProcessingError.created_at",
+    )
+    extracted_blocks: Mapped[list[ExtractedBlock]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ExtractedBlock.sequence_number",
     )
 
     __table_args__ = (
