@@ -3,16 +3,20 @@ import uuid
 from collections.abc import Callable
 from typing import BinaryIO
 
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.repositories.document_repository import DocumentRepository
+from app.repositories.processing_repository import EquationRepository
 from app.schemas import BookMetadata, BookRead, DocumentRead, UploadResult
 from app.services.book_service import BookService
 from app.services.errors import (
+    DocumentNotFoundError,
     DuplicateDocumentError,
     InvalidFileError,
+    ProcessingNotAllowedError,
     StorageError,
     UploadError,
     UploadFailedError,
@@ -25,7 +29,7 @@ from app.services.file_validation import (
     sanitize_filename,
 )
 from app.services.storage_service import StorageBackend, build_original_key
-from database.models import Document, ProcessingStatus
+from database.models import Book, Document, ProcessingStatus
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +132,51 @@ class DocumentService:
             book_created=book_created,
         )
 
+    def delete_document(self, document_id: uuid.UUID) -> bool:
+        """Delete a document with everything derived from it (blocks, equations, structure,
+        passages) and its stored files. A book left with no documents is deleted too.
+
+        Returns True when the book was deleted as well. A document that is being processed
+        cannot be deleted. Database rows go first, in one transaction; files are removed after
+        it commits, and a file that cannot be removed is logged (it is then an orphan, not a
+        reason to keep the record).
+        """
+        document = self.documents.get(document_id)
+        if document is None:
+            raise DocumentNotFoundError("The document no longer exists.")
+        if document.processing_status in (
+            ProcessingStatus.PENDING.value,
+            ProcessingStatus.PROCESSING.value,
+        ):
+            raise ProcessingNotAllowedError(
+                "This document is being processed and cannot be deleted until that finishes."
+            )
+
+        keys = [document.file_path, *EquationRepository(self.session).crop_references(document_id)]
+        book_id = document.book_id
+        title = document.original_filename
+        try:
+            self.session.delete(document)
+            self.session.flush()
+            book_deleted = False
+            remaining = self.session.scalar(
+                select(func.count()).select_from(Document).where(Document.book_id == book_id)
+            )
+            if not remaining:
+                book = self.session.get(Book, book_id)
+                if book is not None:
+                    self.session.delete(book)
+                    book_deleted = True
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
+
+        for key in keys:
+            self._discard_stored_file(key)
+        logger.info("Deleted document %s ('%s')%s", document_id, title, " and its book" if book_deleted else "")
+        return book_deleted
+
     def _raise_if_duplicate(self, sha256: str) -> None:
         existing = self.documents.get_by_hash(sha256)
         if existing is not None:
@@ -140,7 +189,7 @@ class DocumentService:
         try:
             self.storage.delete(key)
         except StorageError:
-            logger.exception("Orphaned file left in storage after failed upload: %s", key)
+            logger.exception("Orphaned file left in storage: %s", key)
 
     def _translate(self, exc: Exception, sha256: str) -> UploadError:
         """Map an internal failure to a user-facing UploadError (never swallowing it)."""

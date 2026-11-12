@@ -12,6 +12,7 @@ from app.logging_config import configure_logging
 from app.ui.equations import render_equations_page
 from app.ui.library import render_library_page
 from app.ui.processing import render_processing_page
+from app.ui.structure import render_structure_page
 from app.ui.upload import render_upload_page
 from database.connection import check_connection
 
@@ -40,7 +41,9 @@ except ValidationError:
     st.stop()
 
 render_header()
-upload_tab, library_tab, processing_tab, equations_tab = st.tabs(["Upload", "Library", "Processing", "Equations"])
+upload_tab, library_tab, processing_tab, equations_tab, structure_tab = st.tabs(
+    ["Upload", "Library", "Processing", "Equations", "Structure"]
+)
 with upload_tab:
     render_upload_page()
 with library_tab:
@@ -49,3 +52,5 @@ with processing_tab:
     render_processing_page()
 with equations_tab:
     render_equations_page()
+with structure_tab:
+    render_structure_page()

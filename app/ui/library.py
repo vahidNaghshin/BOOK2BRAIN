@@ -3,8 +3,12 @@ import logging
 import streamlit as st
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.schemas import BookRead
+from app.config import get_settings
+from app.schemas import BookRead, DocumentRead
 from app.services.book_service import BookService
+from app.services.document_service import DocumentService
+from app.services.errors import ProcessingServiceError
+from app.services.storage_service import get_storage
 from app.ui.formatting import format_size, format_timestamp
 from database.connection import session_scope
 
@@ -94,3 +98,38 @@ def _render_book_details(book: BookRead) -> None:
         hide_index=True,
         width="stretch",
     )
+
+    st.markdown("**Delete a document**")
+    st.caption("Removes the file and everything derived from it: text, equations, structure and passages.")
+    for document in book.documents:
+        _render_delete(book, document)
+
+
+def _render_delete(book: BookRead, document: DocumentRead) -> None:
+    confirm_key = f"library_confirm_delete_{document.id}"
+    label = f"{document.original_filename} ({document.file_format.upper()})"
+    if not st.session_state.get(confirm_key):
+        if st.button("Delete", key=f"library_delete_{document.id}", help=f"Delete {label}"):
+            st.session_state[confirm_key] = True
+            st.rerun()
+        return
+
+    extra = " It is the only document of this book, so the book is removed too." if len(book.documents) == 1 else ""
+    st.warning(f"Delete **{label}**? This cannot be undone.{extra}")
+    yes, no = st.columns(2)
+    if yes.button("Yes, delete", key=f"library_delete_yes_{document.id}", type="primary"):
+        st.session_state.pop(confirm_key, None)
+        try:
+            with session_scope() as session:
+                DocumentService(session, get_storage(), get_settings()).delete_document(document.id)
+        except ProcessingServiceError as exc:
+            st.error(str(exc))
+            return
+        except SQLAlchemyError:
+            logger.exception("Could not delete document %s", document.id)
+            st.error("The document could not be deleted. Check the database connection and the logs.")
+            return
+        st.rerun()
+    if no.button("Cancel", key=f"library_delete_no_{document.id}"):
+        st.session_state.pop(confirm_key, None)
+        st.rerun()

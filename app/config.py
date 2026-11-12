@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -53,6 +53,53 @@ class Settings(BaseSettings):
     # Try math OCR on small, wide picture regions (layout analysis often calls equations that).
     equation_scan_pictures: bool = True
     equation_scan_pictures_max: int = Field(default=300, ge=0)
+
+    # Structure detection (chapters, sections, front/back matter)
+    # A candidate heading scoring at least `accept` is a confident heading; between `reject`
+    # and `accept` it is kept but flagged ambiguous (and sent to the optional LLM); below
+    # `reject` it stays body text.
+    structure_heading_accept_threshold: float = Field(default=0.70, ge=0, le=1)
+    structure_heading_reject_threshold: float = Field(default=0.45, ge=0, le=1)
+    # Detected subtitle/author are only copied into *empty* book fields, and only at or above
+    # this confidence. Metadata entered by the user is never overwritten.
+    structure_fill_empty_book_metadata: bool = False
+    structure_metadata_min_confidence: float = Field(default=0.8, ge=0, le=1)
+
+    # Optional LLM help for ambiguous headings (any OpenAI-compatible chat endpoint).
+    structure_llm_enabled: bool = False
+    structure_llm_base_url: str = "https://api.openai.com/v1"
+    structure_llm_model: str = ""
+    structure_llm_api_key: SecretStr | None = None
+    structure_llm_timeout_seconds: int = Field(default=60, ge=1)
+    structure_llm_max_candidates: int = Field(default=60, ge=1)
+    structure_llm_batch_size: int = Field(default=15, ge=1)
+
+    # Passage segmentation (independent of structure detection; can be regenerated at any time)
+    passage_target_tokens: int = Field(default=750, ge=1)
+    passage_min_tokens: int = Field(default=500, ge=1)
+    passage_max_tokens: int = Field(default=1000, ge=1)
+    # Share of the target size repeated at the start of the next passage (default 12%; the
+    # largest overlap ever taken is 25% above this, i.e. 15%).
+    passage_overlap_ratio: float = Field(default=0.12, ge=0, le=0.4)
+    # approx (characters / chars-per-token), words, whitespace, or tiktoken (if installed).
+    passage_tokenizer: Literal["approx", "words", "whitespace", "tiktoken"] = "approx"
+    passage_chars_per_token: float = Field(default=4.0, gt=0)
+    tiktoken_encoding: str = "cl100k_base"
+    # A table larger than this many times the maximum passage size is split between rows.
+    passage_table_split_factor: float = Field(default=2.0, ge=1)
+
+    @model_validator(mode="after")
+    def _check_structure_settings(self) -> "Settings":
+        if not self.passage_min_tokens <= self.passage_target_tokens <= self.passage_max_tokens:
+            raise ValueError(
+                "Passage sizes must satisfy PASSAGE_MIN_TOKENS <= PASSAGE_TARGET_TOKENS "
+                "<= PASSAGE_MAX_TOKENS"
+            )
+        if self.structure_heading_reject_threshold > self.structure_heading_accept_threshold:
+            raise ValueError(
+                "STRUCTURE_HEADING_REJECT_THRESHOLD must not exceed STRUCTURE_HEADING_ACCEPT_THRESHOLD"
+            )
+        return self
 
     @field_validator("storage_root")
     @classmethod

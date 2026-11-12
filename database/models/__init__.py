@@ -10,10 +10,20 @@ from database.models.processing import (
     ProcessingRunStatus,
     ProcessingStage,
 )
+from database.models.structure import (
+    PAGE_STATUSES,
+    Paragraph,
+    Passage,
+    PassageParagraph,
+    StructuralNode,
+    StructureAnalysis,
+    StructureStatus,
+)
 
 __all__ = [
     "BLOCK_TYPES",
     "EQUATION_TYPES",
+    "PAGE_STATUSES",
     "VALIDATION_STATUSES",
     "Base",
     "Book",
@@ -21,9 +31,15 @@ __all__ = [
     "Equation",
     "EquationStatus",
     "ExtractedBlock",
+    "Paragraph",
+    "Passage",
+    "PassageParagraph",
     "ProcessingError",
     "ProcessingRun",
     "ProcessingRunStatus",
     "ProcessingStage",
     "ProcessingStatus",
+    "StructuralNode",
+    "StructureAnalysis",
+    "StructureStatus",
 ]

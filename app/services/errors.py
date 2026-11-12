@@ -49,3 +49,11 @@ class DocumentNotFoundError(ProcessingServiceError):
 
 class ProcessingNotAllowedError(ProcessingServiceError):
     """The document is in a state that does not allow starting processing."""
+
+
+class StructureServiceError(ProcessingServiceError):
+    """Structure detection or passage generation could not run or failed."""
+
+
+class StructureNotAllowedError(StructureServiceError):
+    """The document is not in a state that allows structure detection (it must be processed)."""

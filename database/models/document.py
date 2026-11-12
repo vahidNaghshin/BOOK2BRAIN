@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from database.models.equation import Equation
     from database.models.extracted_block import ExtractedBlock
     from database.models.processing import ProcessingError, ProcessingRun
+    from database.models.structure import StructuralNode, StructureAnalysis
 
 
 class ProcessingStatus(enum.StrEnum):
@@ -76,6 +77,18 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="Equation.sequence_number",
+    )
+    structural_nodes: Mapped[list[StructuralNode]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="StructuralNode.sequence",
+    )
+    structure_analysis: Mapped[StructureAnalysis | None] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
     )
 
     __table_args__ = (

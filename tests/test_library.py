@@ -63,3 +63,54 @@ def test_get_unknown_book_returns_none(session: Session) -> None:
     import uuid
 
     assert BookService(session).get_book(uuid.uuid4()) is None
+
+
+# -- the Delete button ---------------------------------------------------------------------------
+
+
+def library_app() -> None:
+    from app.ui.library import render_library_page
+
+    render_library_page()
+
+
+def test_delete_button_asks_for_confirmation_then_removes_the_document(
+    document_service: DocumentService, session: Session, storage, settings, engine, monkeypatch
+) -> None:
+    from contextlib import contextmanager
+
+    from streamlit.testing.v1 import AppTest
+
+    document = upload(document_service, make_pdf("ui1"), "dune.pdf", BookMetadata(title="Dune", author="Frank Herbert")).document
+
+    @contextmanager
+    def scope():
+        local = Session(bind=engine, autoflush=False, expire_on_commit=False)
+        try:
+            yield local
+        finally:
+            local.close()
+
+    monkeypatch.setattr("app.ui.library.session_scope", scope)
+    monkeypatch.setattr("app.ui.library.get_settings", lambda: settings)
+    monkeypatch.setattr("app.ui.library.get_storage", lambda: storage)
+
+    at = AppTest.from_function(library_app, default_timeout=30)
+    at.run()
+    delete = next(b for b in at.button if b.key == f"library_delete_{document.id}")
+    assert delete.label == "Delete"
+
+    delete.click().run()
+    assert any("cannot be undone" in w.value for w in at.warning)
+    assert storage.exists(document.file_path)
+
+    next(b for b in at.button if b.key == f"library_delete_no_{document.id}").click().run()
+    assert any(b.key == f"library_delete_{document.id}" for b in at.button)
+
+    next(b for b in at.button if b.key == f"library_delete_{document.id}").click().run()
+    next(b for b in at.button if b.key == f"library_delete_yes_{document.id}").click().run()
+
+    assert not at.exception
+    assert not storage.exists(document.file_path)
+    assert BookService(session).list_books() == []
+    assert any("empty" in i.value for i in at.info)

@@ -216,3 +216,113 @@ class EquationRead(BaseModel):
         default=None, validation_alias=AliasChoices("equation_metadata", "metadata")
     )
     created_at: datetime
+
+
+class StructuralNodeRead(BaseModel):
+    """A node of the reconstructed book hierarchy (front matter, part, chapter, section...)."""
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: uuid.UUID
+    book_id: uuid.UUID
+    document_id: uuid.UUID
+    parent_id: uuid.UUID | None
+    node_type: str
+    title: str
+    original_title: str | None
+    number: str | None
+    level: int
+    sequence: int
+    page_start: int | None
+    page_end: int | None
+    start_offset: int | None
+    end_offset: int | None
+    confidence: float | None
+    metadata: dict[str, Any] | None = Field(
+        default=None, validation_alias=AliasChoices("node_metadata", "metadata")
+    )
+    created_at: datetime
+    updated_at: datetime
+
+
+class ParagraphRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: uuid.UUID
+    book_id: uuid.UUID
+    document_id: uuid.UUID
+    structural_node_id: uuid.UUID
+    sequence: int
+    document_sequence: int
+    kind: str
+    text: str
+    page_start: int | None
+    page_end: int | None
+    page_status: str
+    start_offset: int | None
+    end_offset: int | None
+    metadata: dict[str, Any] | None = Field(
+        default=None, validation_alias=AliasChoices("source_metadata", "metadata")
+    )
+
+
+class PassageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: uuid.UUID
+    book_id: uuid.UUID
+    document_id: uuid.UUID
+    structural_node_id: uuid.UUID
+    text: str
+    sequence: int
+    document_sequence: int
+    page_start: int | None
+    page_end: int | None
+    page_status: str
+    token_count: int
+    start_offset: int | None
+    end_offset: int | None
+    metadata: dict[str, Any] | None = Field(
+        default=None, validation_alias=AliasChoices("passage_metadata", "metadata")
+    )
+    paragraph_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+class StructureIssueRead(BaseModel):
+    severity: str
+    code: str
+    message: str
+    entity_type: str | None = None
+    entity_id: uuid.UUID | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class StructureAnalysisRead(BaseModel):
+    """Status and findings of structure detection and passage generation for a document."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    structure_status: str | None
+    structure_error: str | None
+    structure_detected_at: datetime | None
+    structure_summary: dict[str, Any] | None
+    structure_issues: list[StructureIssueRead] = Field(default_factory=list)
+    passage_status: str | None
+    passage_error: str | None
+    passage_generated_at: datetime | None
+    passage_config: dict[str, Any] | None
+    passage_summary: dict[str, Any] | None
+    passage_issues: list[StructureIssueRead] = Field(default_factory=list)
+
+
+class StructureOverview(BaseModel):
+    """Everything the book-structure view needs, loaded in one go."""
+
+    document_id: uuid.UUID
+    book: BookRead
+    analysis: StructureAnalysisRead | None = None
+    nodes: list[StructuralNodeRead] = Field(default_factory=list)
+    paragraph_counts: dict[uuid.UUID, int] = Field(default_factory=dict)
+    passage_counts: dict[uuid.UUID, int] = Field(default_factory=dict)
+    # True when the document was re-processed after the structure was detected.
+    is_outdated: bool = False

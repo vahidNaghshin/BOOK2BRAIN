@@ -2,7 +2,7 @@
 
 Turn books into a searchable knowledge base. Books are uploaded as PDF, EPUB or DOCX files, stored safely on disk, and tracked in PostgreSQL (with pgvector for later phases).
 
-**Status:** Day 3 — document parsing and OCR. Uploaded books can be converted into clean, normalized text blocks that keep their source location (page numbers for PDF, chapter references for EPUB). Chapter detection and passage segmentation come next.
+**Status:** Day 4 — chapter detection, section hierarchy and passage segmentation. Processed books are turned into a hierarchy (front matter, parts, chapters, sections, appendices...), source paragraphs and AI-ready passages that all keep their page references. Downstream knowledge extraction comes next.
 
 ## Prerequisites
 
@@ -82,7 +82,7 @@ Wait until the `db` service shows `healthy`. Data is kept in the `pgdata` Docker
 alembic upgrade head
 ```
 
-This runs the migrations in `database/migrations/`, creating the `books`, `documents`, `processing_runs`, `processing_errors` and `extracted_blocks` tables and enabling the pgvector extension. Run it again after pulling new migrations; it is safe to repeat.
+This runs the migrations in `database/migrations/`, creating the `books`, `documents`, `processing_runs`, `processing_errors`, `extracted_blocks`, `equations`, `structural_nodes`, `paragraphs`, `passages`, `passage_paragraphs` and `structure_analyses` tables and enabling the pgvector extension. Run it again after pulling new migrations; it is safe to repeat.
 
 ### 6. Launch the application
 
@@ -90,11 +90,13 @@ This runs the migrations in `database/migrations/`, creating the `books`, `docum
 streamlit run app/main.py
 ```
 
-Open http://localhost:8501. The page shows the title, version and database status, with three tabs:
+Open http://localhost:8501. The page shows the title, version and database status, with five tabs:
 
 - **Upload** — choose a PDF, EPUB or DOCX file, enter the book metadata (title is required) and upload it.
 - **Library** — all uploaded documents with title, author, format, size, upload date and processing status, plus a details view for each book and its documents.
 - **Processing** — pick a document, start (or retry) processing, watch its status and progress, and preview the extracted text. See [Processing](#processing).
+- **Equations** — review the equations found in a processed document. See [Equations](#equations).
+- **Structure** — detect and browse the book's hierarchy, paragraphs and passages. See [Book structure](#book-structure-and-passages-day-4).
 
 ## Uploads
 
@@ -189,6 +191,75 @@ Layout analysis often labels an equation as a *picture*. Small, wide picture reg
 
 See `.env.example`: `EQUATION_EXTRACTION_ENABLED`, `FORMULA_ENRICHMENT_ENABLED/DEVICE/DTYPE`, `MATH_OCR_ENABLED/ENGINE`, `EQUATION_MIN_CONFIDENCE`, `EQUATION_STORE_CROPS`, `EQUATION_CROP_DPI`, `EQUATION_SCAN_PICTURES`, `EQUATION_SCAN_PICTURES_MAX`. If the formula model can't be loaded (no internet on first use), the Equations tab and the run summary say so, the document text is unaffected, and equations can be re-extracted later.
 
+## Book structure and passages (Day 4)
+
+Open the **Structure** tab, pick a processed book and press **Detect structure**. Nothing is parsed again: the step reads the text blocks Day 3 stored (with their page numbers and positions) and builds three separate layers.
+
+| Layer | What it is | Table |
+|---|---|---|
+| **Structure** | The book's own organisation: front matter, parts, chapters, sections, subsections, appendices... Any depth, linked parent to child. | `structural_nodes` |
+| **Paragraphs** | The source text of each node, one record per paragraph, list, table, equation or caption, with pages, offsets and bounding boxes. | `paragraphs` |
+| **Passages** | Derived units sized for AI processing, linked to their node and to the paragraphs they were built from (`passage_paragraphs`). | `passages` |
+
+Structure belongs to the *document*, not just the book, because editions differ in pagination and layout. `structure_analyses` holds one status/summary/validation record per document.
+
+### The Structure tab
+
+- **Table of contents**: an outline you can expand and collapse (front matter, back matter and parts start open, chapters collapsed). Selecting a node shows its type, pages, confidence and counts, the sections it contains, its **paragraphs** (source text) and, in a separate tab, its **passages** with token count and original page range. "Include subsections" widens either list to the whole subtree. Nodes with warnings are marked ⚠️.
+- **Book details**: the title, subtitle and author *detected* next to the ones you entered, with confidence.
+- **Warnings**: structured validation errors/warnings/info and the list of low-confidence or ambiguous nodes.
+- **Passage settings**: target/min/max size, overlap and tokenizer. **Regenerate passages** replaces only the passages: the file is not parsed again and structure is not detected again.
+
+### How structure is detected
+
+Detection is deterministic; an LLM is optional and only sees what remains ambiguous (`app/structure/`).
+
+1. **Table of contents** (`toc.py`): a "Contents" heading followed by entry lines (also dot-leader lines and table-shaped contents) is recognised. Those lines stay in the book as content of a *table of contents* node but are never mistaken for headings, and they corroborate real headings found later.
+2. **Candidate scoring** (`heading_detection.py`): every block gets a score from independent evidence: the parser's own heading label, numbering patterns, well-known heading words, text length, capitalisation, sentence shape, size relative to body text (estimated from the bounding boxes), centring, being first on the page, being an isolated short line before body text, agreement with the table of contents, repeated numbering sequences and a style shared with other headings. Penalties apply to sentence-like text, math symbols, code-like lines, running page headers (the same text on nearby pages) and captions. Scores at or above `STRUCTURE_HEADING_ACCEPT_THRESHOLD` (0.70) are confident headings; scores between `…REJECT_THRESHOLD` (0.45) and that are **ambiguous**: kept, typed `other_heading` and flagged with a warning; lower scores stay body text. A rejected parser heading is kept as a paragraph with an info note.
+3. **Numbering** (`numbering.py`): `CHAPTER 1`, `Chapter One`, `Chapter 1: Title`, `1. Title`, `1.1 Title`, `1.1.1.1 Title`, `PART II — Title`, `Part Three: Title`, `Appendix A — Title`, with arabic, roman and written numbers. A label alone (`CHAPTER 1`) followed by a title line is merged into one heading. Numbered headings are not trusted blindly: `Chapter 3 shows that…`, `2 Peter wrote…` and lone numbered lines score low.
+4. **Unnumbered chapters**: styles (parser heading level plus size cluster) are ranked relative to the styles that do have numbering; with no numbering anywhere the most prominent style becomes the chapter level, the next sections, and so on.
+5. **Front and back matter**: the title, subtitle and author are scored from the opening pages (heading label, size, file metadata), so a cover, blank page or half-title before the title page is fine; copyright pages are recognised from © / ISBN / "all rights reserved". Preface, foreword, acknowledgements, introduction, contents and dedication before the first chapter go under a *Front Matter* node; appendices, notes, glossary, bibliography, index and "about the author" after it go under *Back Matter*. In a numbered book `1. Introduction` is chapter 1, not front matter.
+6. **Optional LLM** (`llm.py`): only ambiguous candidates are sent, in batches, with their surroundings; the model classifies existing text, it cannot add headings or rewrite titles (a proposed title must be part of the original heading). Failures are logged and reported as a warning, and the deterministic result stands. Off by default.
+
+Node types: `book_title`, `front_matter`, `back_matter`, `preface`, `foreword`, `acknowledgement`, `introduction`, `part`, `chapter`, `section`, `subsection`, `subsubsection`, `appendix`, `notes`, `bibliography`, `glossary`, `other_heading`, plus `table_of_contents`, `copyright`, `dedication`, `index` and `about_author`. The column is a plain string, so adding a type needs no migration. A node keeps its `original_title` (the heading as written, even over two lines), a normalised `title`, `number`, `level` (depth), document-order `sequence`, pages, offsets and `confidence`; `metadata` records the signals, style and LLM reasoning. Nothing is dropped: text before the first heading goes to the front-matter node, and a document with no headings at all is kept under one node with a warning.
+
+### Paragraphs
+
+A paragraph that continues across a page break (the first block ends mid-sentence, the next starts lowercase on the following page) is stored once with its full text and page range (`metadata.continued_across_pages`, `block_spans` with each block's page and character range). Runs of list items become one list paragraph; tables, equations and captions stay separate. Each paragraph keeps its source block ids/sequences, bounding boxes, equation ids and figure/table references. **Offsets** are positions in the document's canonical text (the stored blocks joined with a blank line); for a paragraph merged from several blocks they give the source span, and `metadata.offsets_exact` says whether the text is exactly that slice.
+
+### Passages
+
+`passages` are generated per structural node, never across nodes. Defaults (all settings in `.env`): target **750**, minimum **500**, maximum **1000** tokens, **12%** overlap (never more than 15%).
+
+- Boundaries fall between paragraphs; a node shorter than the target is one passage; a short last passage is merged into the previous one if the maximum allows.
+- An equation stays with the paragraph before it and the one after it; a table stays whole (a table above `PASSAGE_TABLE_SPLIT_FACTOR` × maximum is split between rows); a figure caption stays with the preceding content and a table caption with its table; text ending in a colon stays with the list/table/equation it introduces. Such units may exceed the maximum (`metadata.oversized` says why).
+- A paragraph over the maximum is split at sentence boundaries (abbreviations such as "e.g." or "Fig." do not end a sentence); a single sentence over the maximum is split at words. Each piece records which part of the paragraph it holds (`passage_paragraphs.text_start/text_end`).
+- **Overlap** repeats the last sentences (or whole last paragraphs) of the previous passage of the *same* node, never an equation or table. It is marked so it cannot be extracted twice: `metadata.overlap_chars` is the length of the repeated prefix (skip `text[:overlap_chars]`), and `passage_paragraphs.is_overlap` flags paragraphs that are present only as overlap.
+- **Tokens** are counted with `PASSAGE_TOKENIZER`: `approx` (characters ÷ `PASSAGE_CHARS_PER_TOKEN`, default 4), `words`, `whitespace`, or `tiktoken` (needs `pip install tiktoken`; not a dependency). The configuration used is stored on the analysis record.
+
+### Pages and traceability
+
+Every passage records `book_id`, `document_id`, `structural_node_id`, `sequence` (inside the node) and `document_sequence`, its text, `token_count`, `page_start`/`page_end`, offsets and `metadata` with the paragraph ids, page numbers, bounding boxes (`page`, `bbox`, `origin`), equation ids and figure/table references, so the original PDF page and its image regions can be fetched later. Pages are copied from the Day 3 blocks, never derived from text length. `page_status` is `exact`, `partial` (some blocks without a page) or `unknown`: EPUB and DOCX have no pages, so their pages are `NULL`/`unknown` rather than invented. Page numbers are PDF page indices (starting at 1), not the numbers printed on the page.
+
+### Validation
+
+`app/structure/validation.py` returns structured issues (`error`, `warning`, `info`, a stable `code`, the entity concerned) that are saved on the analysis record and shown in the Warnings tab.
+
+- **Hierarchy**: valid ids and parents, no cycles, levels equal parent level + 1, document order, duplicate nodes, children inside their parent's blocks/offsets, numbering order/gaps, skipped levels, empty nodes.
+- **Pages**: within the document's page count, start ≤ end, children within parents, missing page references on paginated documents.
+- **Passages**: valid book/document/node, ordering and sequence, token counts recomputed, passage pages consistent with their paragraphs, overlap taken from the previous passage and within policy, no empty passages.
+- **Content**: every extracted block ends up exactly once (as a heading or in a paragraph), paragraph text equals its source blocks, a node's passages together contain exactly its text (nothing omitted or duplicated), headings are not repeated as body text, ambiguous or low-confidence classifications produce warnings. Unclassified content is always kept.
+
+### Running it again
+
+Detection replaces a document's nodes, paragraphs and passages in one transaction, so repeating it never leaves duplicates and a failure keeps the previous result (the failure is recorded). **Regenerate passages** only rebuilds passages from the stored paragraphs. If a document is processed again after its structure was detected, the tab tells you the structure is out of date.
+
+### Structure settings
+
+`STRUCTURE_HEADING_ACCEPT_THRESHOLD`, `STRUCTURE_HEADING_REJECT_THRESHOLD`, `STRUCTURE_FILL_EMPTY_BOOK_METADATA`, `STRUCTURE_METADATA_MIN_CONFIDENCE`, `STRUCTURE_LLM_ENABLED`, `STRUCTURE_LLM_BASE_URL`, `STRUCTURE_LLM_MODEL`, `STRUCTURE_LLM_API_KEY`, `STRUCTURE_LLM_TIMEOUT_SECONDS`, `STRUCTURE_LLM_MAX_CANDIDATES`, `STRUCTURE_LLM_BATCH_SIZE`, `PASSAGE_TARGET_TOKENS`, `PASSAGE_MIN_TOKENS`, `PASSAGE_MAX_TOKENS`, `PASSAGE_OVERLAP_RATIO`, `PASSAGE_TOKENIZER`, `PASSAGE_CHARS_PER_TOKEN`, `TIKTOKEN_ENCODING`, `PASSAGE_TABLE_SPLIT_FACTOR` (see `.env.example`). Metadata you entered is never overwritten: detected values are shown beside it, and with `STRUCTURE_FILL_EMPTY_BOOK_METADATA=true` only *empty* subtitle/author fields are filled, at or above the confidence threshold and never if that would duplicate an existing book (title + author).
+
+The LLM works with any OpenAI-compatible `/chat/completions` endpoint (hosted, or a local server such as Ollama or vLLM): set `STRUCTURE_LLM_ENABLED=true`, `STRUCTURE_LLM_MODEL` and, for hosted services, `STRUCTURE_LLM_BASE_URL` and `STRUCTURE_LLM_API_KEY`. Without them, no network call is ever made.
+
 ## Common tasks
 
 | Task | Command |
@@ -214,6 +285,7 @@ Database tests use a separate database named after yours with a `_test` suffix (
 
 - Tests that use the real Docling PDF models are skipped automatically if the models cannot be loaded (for example offline on a fresh machine). Run PDF processing once, or `docling-tools models download`, to enable them. The equation tests that run the real formula model are skipped separately if that model (about 600 MB, downloaded on first use) is missing.
 - Equation tests render their PDFs with matplotlib (a test-only dependency in `requirements.txt`).
+- Structure and passage tests build synthetic books in code (`tests/structure_helpers.py`): numbered and unnumbered chapters, parts, front/back matter, multi-level numbering, equations, tables, captions, multi-page paragraphs and chapters, ambiguous headings. The LLM is always faked. Tests marked `sample_book` also run the real PDF pipeline on the first 70 pages of the sample book in `storage/original` (git-ignored, so they are skipped when it is absent or Docling's models are missing).
 - Tests marked `ocr` use a real Tesseract installation and are skipped if it is missing. Run only them with `pytest -m ocr`, or leave them out with `pytest -m "not ocr"`. All other OCR tests use a fake engine.
 
 ## Troubleshooting the database connection
@@ -235,6 +307,7 @@ The app shows the same message under the title.
 | `relation "books" does not exist` | The tables haven't been created. Run `alembic upgrade head`. |
 | `relation "extracted_blocks" does not exist` or `column ... stage does not exist` | The Day 3 migration hasn't been applied. Run `alembic upgrade head`. |
 | `relation "equations" does not exist` or `column ... equation_status does not exist` | The Day 3.1 migration hasn't been applied. Run `alembic upgrade head`. |
+| `relation "structural_nodes" does not exist` | The Day 4 migration hasn't been applied. Run `alembic upgrade head`. |
 
 ## Troubleshooting processing
 
@@ -249,6 +322,10 @@ Failed documents show the reason in the Processing tab, with the error code and 
 | `unexpected_error` | A bug or environment problem. The traceback is in the error details and the app log. |
 | Download fails with `CERTIFICATE_VERIFY_FAILED` | See [Docling models](#docling-models). |
 | Equations tab: `equation_extraction_failed`, `formula_enrichment_failed` | The text is fine. The formula model could not be loaded (first use needs internet; see [Docling models](#docling-models)) or crashed. Fix the cause and press **Re-extract equations**. Math OCR is tried as a fallback where it works. |
+| Structure tab: "must be processed before its structure can be detected" | Process the document first (Processing tab). Structure detection reads the stored text. |
+| Structure tab: `ambiguous_heading`, `low_confidence_node` | Expected for headings with little typographic evidence (plain-text input, unusual layouts). The text is kept; check the node in the Warnings tab, or enable the optional LLM. |
+| Structure tab: `toc_mismatch` | Few table-of-contents entries match detected headings: the structure may be incomplete or the contents list a different edition. |
+| Structure tab: `PASSAGE_TOKENIZER=tiktoken needs…` | Install `tiktoken` or choose `approx`, `words` or `whitespace`. |
 | Equations marked `uncertain` | Expected for model output with nothing to confirm it (scans, no reported confidence). Check them against the region image. |
 | `unsupported_omml` | A Word equation uses a structure the converter can't handle. It is listed as invalid with its original OMML kept; the rest of the document is unaffected. |
 
@@ -259,9 +336,13 @@ app/
   main.py          Streamlit entry point
   config.py        Settings (environment variables)
   schemas.py       Pydantic models (book metadata, read models)
-  ui/              Streamlit pages: upload.py, library.py, processing.py, equations.py
+  ui/              Streamlit pages: upload.py, library.py, processing.py, equations.py, structure.py
   services/        Business logic: book_service, document_service, storage_service,
-                   file_validation, document_processing_service, job_runner
+                   file_validation, document_processing_service, job_runner, structure_service
+  structure/       Day 4, pure computation (no database): numbering.py, toc.py, typography.py,
+                   heading_detection.py, front_matter.py, hierarchy.py, paragraphs.py,
+                   segmentation.py, tokenizer.py, validation.py, llm.py (optional),
+                   detector.py (pipeline), tree.py (outline helpers), models.py
   parsing/         Parsers and OCR, independent of the UI and the database:
                    models.py (output models), base.py, parser_factory.py,
                    pdf_parser.py, epub_parser.py, docx_parser.py, ocr_service.py,
@@ -273,7 +354,8 @@ app/
   repositories/    Database queries
 database/
   connection.py    Engine, sessions, connection check
-  models/          SQLAlchemy models (Book, Document, ProcessingRun, ProcessingError, ExtractedBlock, Equation)
+  models/          SQLAlchemy models (Book, Document, ProcessingRun, ProcessingError, ExtractedBlock, Equation,
+                   StructuralNode, Paragraph, Passage, PassageParagraph, StructureAnalysis)
   migrations/      Alembic migrations (configured by alembic.ini)
   init/            Scripts run when the Docker database is first created
 ingestion/         Reserved for later phases
@@ -287,7 +369,9 @@ The layers are kept separate: the UI calls services, services call parsers, repo
 ## Known limitations
 
 - A completed document cannot be re-processed yet (for example after changing OCR settings); only failed documents can be retried.
-- Chapter detection, section hierarchy and passage segmentation are not implemented (Day 4). `section_title` is only the nearest preceding heading.
+- Structure detection is heuristic. It works from the headings, sizes and positions Docling reports; books whose headings are not marked up (plain text, scans with poor layout analysis) produce more ambiguous nodes, and the optional LLM only classifies candidates the heuristics already found. A two-line title page that the parser merges into one block is split only when the author's name appears elsewhere in the opening pages. Headings the parser mislabels (formulas, pseudocode) can still appear as nodes, usually flagged ambiguous. Page headers repeated on three or more nearby pages are ignored as headings.
+- Structure and passages are rebuilt for the whole document at once; they cannot be edited by hand yet. Overlap is taken from prose paragraphs only. Passage token counts are approximate unless `tiktoken` is used.
+- The Structure tab shows page numbers but not page images yet; the stored page numbers and bounding boxes are what a later step needs to fetch them.
 - Page headers and footers detected by Docling are left out of PDF text. Text inside images that are not full-page scans is not OCR'd.
 - DOCX and EPUB have no page numbers; blocks are located by element and chapter references instead.
 - One document is processed at a time, and the work runs inside the app process: restarting the app interrupts a run (it can then be retried).
