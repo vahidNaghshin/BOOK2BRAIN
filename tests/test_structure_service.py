@@ -27,6 +27,7 @@ from database.models import (
     StructuralNode,
     StructureAnalysis,
 )
+from database.models.base import utcnow
 from tests.structure_helpers import DocBuilder, numbered_textbook, persist_document, plain_text_book
 from tests.test_structure_llm import FakeClassifier
 
@@ -350,7 +351,10 @@ def test_overview_notices_when_the_document_was_processed_again(
     svc.detect_structure(document.id)
     session.add(
         ProcessingRun(
-            document_id=document.id, status=ProcessingRunStatus.COMPLETED.value, result_summary={"page_count": 9}
+            document_id=document.id,
+            status=ProcessingRunStatus.COMPLETED.value,
+            result_summary={"page_count": 9},
+            text_completed_at=utcnow(),
         )
     )
     session.commit()

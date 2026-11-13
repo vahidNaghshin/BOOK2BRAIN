@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 import streamlit as st
 from pydantic import ValidationError
@@ -6,10 +7,12 @@ from pydantic import ValidationError
 from app.config import get_settings
 from app.schemas import BookMetadata
 from app.services.document_service import DocumentService
-from app.services.errors import DuplicateDocumentError, UploadError
+from app.services.errors import DuplicateDocumentError, ProcessingServiceError, UploadError
 from app.services.file_validation import SUPPORTED_EXTENSIONS
 from app.services.storage_service import get_storage
 from app.ui.formatting import format_size
+from app.ui.navigation import goto
+from app.ui.processing import get_job_runner
 from database.connection import check_connection, session_scope
 
 logger = logging.getLogger(__name__)
@@ -21,6 +24,8 @@ _FIELD_LABELS = {
     "isbn": "ISBN",
     "language": "Language",
     "description": "Description",
+    "publisher": "Publisher",
+    "publication_year": "Publication year",
 }
 
 
@@ -52,27 +57,45 @@ def render_upload_page() -> None:
         subtitle = right.text_input("Subtitle")
         isbn = left.text_input("ISBN")
         language = right.text_input("Language", placeholder="e.g. English or en")
+        publisher = left.text_input("Publisher")
+        year = right.text_input("Publication year", placeholder="e.g. 2016")
         description = st.text_area("Description")
+        start_processing = st.checkbox(
+            "Start processing after upload",
+            value=True,
+            help="Extracts the text, detects chapters and sections and generates passages.",
+        )
         submitted = st.form_submit_button("Upload", type="primary")
 
     if submitted:
-        _handle_submit(uploaded, title, author, subtitle, isbn, language, description)
+        _handle_submit(
+            uploaded,
+            {
+                "title": title,
+                "author": author,
+                "subtitle": subtitle,
+                "isbn": isbn,
+                "language": language,
+                "description": description,
+                "publisher": publisher,
+                "publication_year": year.strip() or None,
+            },
+            start_processing,
+        )
+
+    if st.session_state.get("upload_started_document"):
+        if st.button("Follow progress in the Library", key="upload_go_library", type="primary"):
+            goto("Library", document_id=uuid.UUID(st.session_state.pop("upload_started_document")))
 
 
-def _handle_submit(uploaded, title, author, subtitle, isbn, language, description) -> None:
+def _handle_submit(uploaded, fields: dict, start_processing: bool) -> None:
+    st.session_state.pop("upload_started_document", None)
     if uploaded is None:
         st.error("Select a book file to upload.")
         return
 
     try:
-        metadata = BookMetadata(
-            title=title,
-            author=author,
-            subtitle=subtitle,
-            isbn=isbn,
-            language=language,
-            description=description,
-        )
+        metadata = BookMetadata(**fields)
     except ValidationError as exc:
         for message in _validation_messages(exc):
             st.error(message)
@@ -116,3 +139,19 @@ def _handle_submit(uploaded, title, author, subtitle, isbn, language, descriptio
             f"Uploaded {document.original_filename} ({document.file_format.upper()}, "
             f"{format_size(document.file_size)}) {kind} '{result.book.title}'."
         )
+        if start_processing:
+            _start_processing(document.id)
+
+
+def _start_processing(document_id) -> None:
+    """Queue the pipeline. An upload that succeeded stays successful if processing cannot start."""
+    try:
+        get_job_runner().submit(document_id)
+    except ProcessingServiceError as exc:
+        st.warning(f"The file was uploaded, but processing could not start: {exc} Start it from the Library.")
+    except Exception:
+        logger.exception("Could not start processing after upload")
+        st.warning("The file was uploaded, but processing could not start. Start it from the Library.")
+    else:
+        st.info("Processing started. It runs in the background; follow its stage in the Library.")
+        st.session_state["upload_started_document"] = str(document_id)

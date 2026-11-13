@@ -199,6 +199,7 @@ def persist_document(session, doc: DocumentText, *, title: str = "Sample Book", 
             document_id=document.id,
             status=ProcessingRunStatus.COMPLETED.value,
             completed_at=utcnow(),
+            text_completed_at=utcnow(),
             result_summary=summary,
         )
     )
@@ -266,12 +267,14 @@ def document_from_parsing(result) -> DocumentText:
         location = block.source_location or {}
         raw = location.get("bbox")
         metadata = block.metadata or {}
+        spanned = [p for p in location.get("pages", []) if isinstance(p, int)]
         blocks.append(
             SourceBlock(
                 sequence=index,
                 text=block.text,
                 block_type=block.block_type.value,
                 page=block.page_number,
+                last_page=max(spanned) if spanned and block.page_number is not None else None,
                 bbox=tuple(raw) if isinstance(raw, list) and len(raw) == 4 else None,
                 coord_origin=location.get("coord_origin"),
                 heading_level=metadata.get("heading_level"),
@@ -283,3 +286,28 @@ def document_from_parsing(result) -> DocumentText:
         )
         offset += len(block.text) + 2
     return DocumentText(blocks=blocks, page_count=result.page_count, file_format=result.file_format)
+
+
+def content_blocks(document: DocumentText):
+    """The `ContentBlock`s a Day 3 parser would have produced for `document` (for stub parsers)."""
+    from app.parsing.models import BlockType, ContentBlock
+
+    result = []
+    for block in document.blocks:
+        location = None
+        if block.page is not None and block.bbox:
+            location = {"page": block.page, "bbox": list(block.bbox), "coord_origin": block.coord_origin}
+        metadata = dict(block.metadata)
+        if block.heading_level is not None:
+            metadata["heading_level"] = block.heading_level
+        result.append(
+            ContentBlock(
+                text=block.text,
+                block_type=BlockType(block.block_type),
+                page_number=block.page,
+                source_location=location,
+                sequence_number=block.sequence,
+                metadata=metadata or None,
+            )
+        )
+    return result

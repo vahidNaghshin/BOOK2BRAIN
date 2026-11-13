@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
+from collections.abc import Callable
 
 from app.structure.front_matter import detect_metadata
 from app.structure.heading_detection import HeadingCandidate, detect_headings
@@ -61,7 +62,12 @@ class StructureDetector:
         self.classifier = classifier
         self.llm_max_candidates = llm_max_candidates
 
-    def detect(self, document: DocumentText) -> StructureResult:
+    def detect(
+        self, document: DocumentText, on_stage: Callable[[str], None] | None = None
+    ) -> StructureResult:
+        """Run the pipeline. `on_stage` is told when paragraph identification begins, so callers
+        can report progress (the caller announces structural detection itself, before calling)."""
+        notify = on_stage or (lambda _stage: None)
         blocks = document.blocks
         issues: list[ValidationIssue] = []
 
@@ -105,6 +111,7 @@ class StructureDetector:
 
         hierarchy = build_hierarchy(document, candidates, guess)
         issues.extend(hierarchy.issues)
+        notify("paragraph_identification")
         paragraphs = build_paragraphs(document, hierarchy.nodes, hierarchy.block_nodes)
 
         for rejected in detection.rejected:

@@ -11,12 +11,23 @@ from app.config import get_settings
 from app.logging_config import configure_logging
 from app.ui.equations import render_equations_page
 from app.ui.library import render_library_page
+from app.ui.navigation import render_navigation
+from app.ui.passages import render_passages_page
 from app.ui.processing import render_processing_page
 from app.ui.structure import render_structure_page
 from app.ui.upload import render_upload_page
 from database.connection import check_connection
 
 st.set_page_config(page_title="BOOK2BRAIN", page_icon="🧠")
+
+SCREENS = {
+    "Library": render_library_page,
+    "Upload": render_upload_page,
+    "Structure": render_structure_page,
+    "Passages": render_passages_page,
+    "Processing": render_processing_page,
+    "Equations": render_equations_page,
+}
 
 
 def render_header() -> None:
@@ -41,16 +52,5 @@ except ValidationError:
     st.stop()
 
 render_header()
-upload_tab, library_tab, processing_tab, equations_tab, structure_tab = st.tabs(
-    ["Upload", "Library", "Processing", "Equations", "Structure"]
-)
-with upload_tab:
-    render_upload_page()
-with library_tab:
-    render_library_page()
-with processing_tab:
-    render_processing_page()
-with equations_tab:
-    render_equations_page()
-with structure_tab:
-    render_structure_page()
+# Only the chosen screen runs, so a screen never works in the background while hidden.
+SCREENS[render_navigation()]()

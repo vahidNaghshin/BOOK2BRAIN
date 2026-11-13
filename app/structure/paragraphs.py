@@ -40,6 +40,10 @@ def _join(left: str, right: str) -> str:
     return left + right if left.endswith("-") else f"{left} {right}"
 
 
+def _pages_of(block: SourceBlock) -> list[int]:
+    return [p for p in (block.page, block.last_page) if p is not None]
+
+
 def _page_status(blocks: list[SourceBlock]) -> str:
     known = sum(1 for b in blocks if b.page is not None)
     if known == len(blocks):
@@ -47,16 +51,21 @@ def _page_status(blocks: list[SourceBlock]) -> str:
     return "partial" if known else "unknown"
 
 
+def _span(block: SourceBlock, start: int, end: int) -> dict:
+    span = {"sequence": block.sequence, "page": block.page, "char_start": start, "char_end": end}
+    if block.last_page is not None and block.last_page != block.page:
+        span["last_page"] = block.last_page
+    return span
+
+
 def _combine(kind: str, members: list[SourceBlock]) -> tuple[str, list[dict]]:
     """Paragraph text and, for each block, the character range it occupies in that text."""
     text = members[0].text.strip() if len(members) > 1 else members[0].text
-    spans = [{"sequence": members[0].sequence, "page": members[0].page, "char_start": 0, "char_end": len(text)}]
+    spans = [_span(members[0], 0, len(text))]
     for block in members[1:]:
         piece = block.text.strip()
         text = f"{text}\n{piece}" if kind == "list" else _join(text, piece)
-        spans.append(
-            {"sequence": block.sequence, "page": block.page, "char_start": len(text) - len(piece), "char_end": len(text)}
-        )
+        spans.append(_span(block, len(text) - len(piece), len(text)))
     return text, spans
 
 
@@ -80,11 +89,11 @@ def _make_paragraph(
             if b.bbox is not None
         ],
     }
-    pages = [b.page for b in members if b.page is not None]
+    pages = [p for b in members for p in _pages_of(b)]
     if len(members) > 1:
         metadata["block_spans"] = spans
-        if kind == "paragraph" and len(set(pages)) > 1:
-            metadata["continued_across_pages"] = True
+    if kind == "paragraph" and len(set(pages)) > 1:
+        metadata["continued_across_pages"] = True
     equation_ids = [
         str(document.equation_ids_by_block[b.id])
         for b in members

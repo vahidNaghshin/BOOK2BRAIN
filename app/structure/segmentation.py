@@ -325,9 +325,10 @@ def _piece_pages(piece: _Piece) -> tuple[int | None, int | None, str]:
         return paragraph.page_start, paragraph.page_end, paragraph.page_status
     overlapping = [s for s in spans if s["char_start"] < piece.text_end and s["char_end"] > piece.text_start]
     pages = [s["page"] for s in overlapping if s["page"] is not None]
+    pages += [s["last_page"] for s in overlapping if s.get("last_page") is not None]
     if not pages:
         return None, None, "unknown"
-    status = "exact" if len(pages) == len(overlapping) else "partial"
+    status = "exact" if all(s["page"] is not None for s in overlapping) else "partial"
     return min(pages), max(pages), status
 
 

@@ -40,7 +40,18 @@ def test_blank_optional_fields_become_none() -> None:
         "isbn": None,
         "language": None,
         "description": None,
+        "publisher": None,
+        "publication_year": None,
     }
+
+
+def test_publisher_and_publication_year_are_optional_and_validated() -> None:
+    metadata = BookMetadata(title="Dune", publisher=" Chilton Books ", publication_year="1965")
+
+    assert (metadata.publisher, metadata.publication_year) == ("Chilton Books", 1965)
+    for bad in ("nineteen", "99", "3000"):
+        with pytest.raises(ValidationError):
+            BookMetadata(title="Dune", publication_year=bad)
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,7 @@
 import logging
 import statistics
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy import select
@@ -83,7 +84,7 @@ class StructureService:
         if book is None:
             raise DocumentNotFoundError("The book of this document no longer exists.")
         analysis = self.repo.get_analysis(document_id)
-        run = self.repo.latest_completed_run(document_id)
+        run = self.repo.latest_text_run(document_id)
         outdated = bool(
             analysis
             and analysis.structure_status == StructureStatus.COMPLETED.value
@@ -126,17 +127,50 @@ class StructureService:
             result.append(passage)
         return result
 
+    def get_passage(self, document_id: uuid.UUID, passage_id: uuid.UUID) -> PassageRead | None:
+        """One passage, scoped to the document (a passage of another document is never returned)."""
+        row = self.repo.passage(document_id, passage_id)
+        if row is None:
+            return None
+        passage = PassageRead.model_validate(row)
+        passage.paragraph_ids = list(dict.fromkeys(self.repo.passage_paragraph_ids([row.id]).get(row.id, [])))
+        return passage
+
+    def passage_context(
+        self, document_id: uuid.UUID, passage: PassageRead, node_ids: list[uuid.UUID] | None = None
+    ) -> tuple[uuid.UUID | None, uuid.UUID | None, int, int]:
+        """(previous passage id, next passage id, position, total) among the passages of `node_ids`
+        (the whole document when None), in document order."""
+        previous = self.repo.adjacent_passage(document_id, passage.document_sequence, node_ids, previous=True)
+        following = self.repo.adjacent_passage(document_id, passage.document_sequence, node_ids, previous=False)
+        position, total = self.repo.passage_position(document_id, passage.document_sequence, node_ids)
+        return (previous.id if previous else None, following.id if following else None, position, total)
+
+    def get_paragraphs(self, document_id: uuid.UUID, paragraph_ids: list[uuid.UUID]) -> list[ParagraphRead]:
+        return [ParagraphRead.model_validate(p) for p in self.repo.paragraphs_by_ids(document_id, paragraph_ids)]
+
     def count_passages(self, document_id: uuid.UUID, node_ids: list[uuid.UUID] | None = None) -> int:
         return self.repo.count_passages(document_id, node_ids)
 
     # -- commands ------------------------------------------------------------------------
 
     def detect_structure(
-        self, document_id: uuid.UUID, config: SegmentationConfig | None = None
+        self,
+        document_id: uuid.UUID,
+        config: SegmentationConfig | None = None,
+        *,
+        on_stage: Callable[[str], None] | None = None,
+        require_completed: bool = True,
     ) -> StructureAnalysisRead:
-        """(Re)build nodes, paragraphs and passages from the stored text of a processed document."""
-        document = self._lock_processed_document(document_id)
-        run = self.repo.latest_completed_run(document_id)
+        """(Re)build nodes, paragraphs and passages from the stored text of a processed document.
+
+        `on_stage` is told which stage is starting (structural_detection, paragraph_identification,
+        passage_segmentation, persistence). The processing pipeline passes `require_completed=False`
+        because it runs this while the document is still "processing".
+        """
+        notify = on_stage or (lambda _stage: None)
+        document = self._lock_processed_document(document_id, require_completed=require_completed)
+        run = self.repo.latest_text_run(document_id)
         config = config or self.default_config()
         try:
             text = self._load_text(document, run.result_summary if run else None)
@@ -147,15 +181,18 @@ class StructureService:
                 classifier=classifier,
                 llm_max_candidates=self.settings.structure_llm_max_candidates,
             )
-            result = detector.detect(text)
+            notify("structural_detection")
+            result = detector.detect(text, on_stage=notify)
             result.issues.extend(llm_issues)
             result.summary["issues"] = count_by_severity(result.issues)
             result.summary["source_run_id"] = str(run.id) if run else None
 
+            notify("passage_segmentation")
             tokenizer = config.build_tokenizer()
             passages = generate_passages(result.nodes, result.paragraphs, config, tokenizer)
             passage_issues = validate_passages(text, result.nodes, result.paragraphs, passages, config, tokenizer)
 
+            notify("persistence")
             self.repo.replace_structure(document, result.nodes, result.paragraphs)
             self.repo.replace_passages(document, passages)
             result.summary["applied_book_metadata"] = self._apply_metadata(document, result.metadata_guess)
@@ -201,7 +238,7 @@ class StructureService:
         try:
             nodes = [self._node_draft(n) for n in self.repo.nodes(document_id)]
             paragraphs = [self._paragraph_draft(p) for p in self.repo.paragraphs(document_id)]
-            run = self.repo.latest_completed_run(document_id)
+            run = self.repo.latest_text_run(document_id)
             text = DocumentText(
                 blocks=[],
                 page_count=(run.result_summary or {}).get("page_count") if run else None,
@@ -234,13 +271,13 @@ class StructureService:
             raise DocumentNotFoundError("The document no longer exists.")
         return document
 
-    def _lock_processed_document(self, document_id: uuid.UUID) -> Document:
+    def _lock_processed_document(self, document_id: uuid.UUID, *, require_completed: bool = True) -> Document:
         stmt = select(Document).where(Document.id == document_id).with_for_update()
         document = self.session.execute(stmt).scalar_one_or_none()
         if document is None:
             self.session.rollback()
             raise DocumentNotFoundError("The document no longer exists.")
-        if document.processing_status != ProcessingStatus.COMPLETED.value:
+        if require_completed and document.processing_status != ProcessingStatus.COMPLETED.value:
             self.session.rollback()
             raise StructureNotAllowedError(
                 "The document must be processed (text extracted) before its structure can be detected."
@@ -275,12 +312,14 @@ class StructureService:
             raw_box = location.get("bbox")
             bbox = tuple(float(v) for v in raw_box) if isinstance(raw_box, list) and len(raw_box) == 4 else None
             metadata = row.block_metadata or {}
+            spanned = [p for p in (location.get("pages") or []) if isinstance(p, int)]
             blocks.append(
                 SourceBlock(
                     sequence=row.sequence_number,
                     text=row.text,
                     block_type=row.block_type,
                     page=row.page_number,
+                    last_page=max(spanned) if spanned and row.page_number is not None else None,
                     bbox=bbox,  # type: ignore[arg-type]
                     coord_origin=location.get("coord_origin"),
                     heading_level=metadata.get("heading_level"),

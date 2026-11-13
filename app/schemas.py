@@ -48,6 +48,8 @@ class BookMetadata(BaseModel):
     isbn: str | None = None
     language: Annotated[str, StringConstraints(max_length=64)] | None = None
     description: Annotated[str, StringConstraints(max_length=20000)] | None = None
+    publisher: Annotated[str, StringConstraints(max_length=500)] | None = None
+    publication_year: Annotated[int, Field(ge=1000, le=2200)] | None = None
 
     @field_validator("title", mode="before")
     @classmethod
@@ -59,7 +61,7 @@ class BookMetadata(BaseModel):
     def _clean_names(cls, value: object) -> object:
         return normalize_text(value) if isinstance(value, str) else value
 
-    @field_validator("author", "subtitle", "isbn", "language", "description", mode="before")
+    @field_validator("author", "subtitle", "isbn", "language", "description", "publisher", "publication_year", mode="before")
     @classmethod
     def _blank_to_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
@@ -104,6 +106,8 @@ class BookRead(BaseModel):
     description: str | None
     language: str | None
     isbn: str | None
+    publisher: str | None = None
+    publication_year: int | None = None
     created_at: datetime
     updated_at: datetime
     documents: list[DocumentRead] = Field(default_factory=list)
@@ -142,6 +146,11 @@ class ProcessingRunRead(BaseModel):
     completed_at: datetime | None
     error_message: str | None
     created_at: datetime
+    updated_at: datetime | None = None
+    book_id: uuid.UUID | None = None
+    retry_count: int = 0
+    text_completed_at: datetime | None = None
+    stage_results: dict[str, Any] | None = None
     # Equation extraction has its own status; it never changes the run or document status.
     equation_status: str = "not_started"
     equation_summary: dict[str, Any] | None = None
@@ -154,6 +163,8 @@ class ProcessingErrorRead(BaseModel):
     id: uuid.UUID
     processing_run_id: uuid.UUID | None
     error_type: str
+    stage: str | None = None
+    retry_attempt: int = 0
     error_message: str
     details: dict[str, Any] | None
     created_at: datetime

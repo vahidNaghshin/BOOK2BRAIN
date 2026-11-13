@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Index, String, Text, text
+from sqlalchemy import CheckConstraint, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -21,6 +21,8 @@ class Book(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     author: Mapped[str | None] = mapped_column(String(500))
     description: Mapped[str | None] = mapped_column(Text)
     language: Mapped[str | None] = mapped_column(String(64))
+    publisher: Mapped[str | None] = mapped_column(String(500))
+    publication_year: Mapped[int | None] = mapped_column(Integer)
     # Not unique: one logical book can have several ISBNs (print, ebook, editions).
     isbn: Mapped[str | None] = mapped_column(String(20), index=True)
 
@@ -32,6 +34,10 @@ class Book(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "publication_year IS NULL OR (publication_year >= 1000 AND publication_year <= 2200)",
+            name="publication_year_range",
+        ),
         # A logical book is identified by case-insensitive title and author.
         Index(
             "uq_books_title_author",

@@ -131,6 +131,9 @@ class SourceBlock:
     text: str
     block_type: str
     page: int | None = None
+    # Last page of a block that runs across a page break (Docling merges some such blocks); None
+    # when it stays on `page`.
+    last_page: int | None = None
     bbox: tuple[float, float, float, float] | None = None  # l, t, r, b
     coord_origin: str | None = None
     heading_level: int | None = None

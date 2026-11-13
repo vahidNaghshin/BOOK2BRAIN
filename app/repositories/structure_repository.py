@@ -14,7 +14,6 @@ from database.models import (
     Passage,
     PassageParagraph,
     ProcessingRun,
-    ProcessingRunStatus,
     StructuralNode,
     StructureAnalysis,
 )
@@ -31,13 +30,11 @@ class StructureRepository:
 
     # -- source data (Day 3) --------------------------------------------------------
 
-    def latest_completed_run(self, document_id: uuid.UUID) -> ProcessingRun | None:
+    def latest_text_run(self, document_id: uuid.UUID) -> ProcessingRun | None:
+        """The newest run whose extracted text was saved (even if later stages are still running)."""
         stmt = (
             select(ProcessingRun)
-            .where(
-                ProcessingRun.document_id == document_id,
-                ProcessingRun.status == ProcessingRunStatus.COMPLETED.value,
-            )
+            .where(ProcessingRun.document_id == document_id, ProcessingRun.text_completed_at.is_not(None))
             .order_by(ProcessingRun.created_at.desc())
             .limit(1)
         )
@@ -234,6 +231,47 @@ class StructureRepository:
         if node_ids is not None:
             stmt = stmt.where(Passage.structural_node_id.in_(list(node_ids)))
         return self.session.scalar(stmt) or 0
+
+    def passage(self, document_id: uuid.UUID, passage_id: uuid.UUID) -> Passage | None:
+        stmt = select(Passage).where(Passage.document_id == document_id, Passage.id == passage_id)
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def passage_position(
+        self, document_id: uuid.UUID, document_sequence: int, node_ids: Iterable[uuid.UUID] | None
+    ) -> tuple[int, int]:
+        """(1-based position of a passage, total) among the passages of the given nodes."""
+        base = select(func.count()).select_from(Passage).where(Passage.document_id == document_id)
+        if node_ids is not None:
+            base = base.where(Passage.structural_node_id.in_(list(node_ids)))
+        before = self.session.scalar(base.where(Passage.document_sequence <= document_sequence)) or 0
+        return before, self.session.scalar(base) or 0
+
+    def adjacent_passage(
+        self,
+        document_id: uuid.UUID,
+        document_sequence: int,
+        node_ids: Iterable[uuid.UUID] | None,
+        *,
+        previous: bool,
+    ) -> Passage | None:
+        stmt = select(Passage).where(Passage.document_id == document_id)
+        if node_ids is not None:
+            stmt = stmt.where(Passage.structural_node_id.in_(list(node_ids)))
+        if previous:
+            stmt = stmt.where(Passage.document_sequence < document_sequence).order_by(Passage.document_sequence.desc())
+        else:
+            stmt = stmt.where(Passage.document_sequence > document_sequence).order_by(Passage.document_sequence)
+        return self.session.execute(stmt.limit(1)).scalar_one_or_none()
+
+    def paragraphs_by_ids(self, document_id: uuid.UUID, paragraph_ids: list[uuid.UUID]) -> list[Paragraph]:
+        if not paragraph_ids:
+            return []
+        stmt = (
+            select(Paragraph)
+            .where(Paragraph.document_id == document_id, Paragraph.id.in_(paragraph_ids))
+            .order_by(Paragraph.document_sequence)
+        )
+        return list(self.session.execute(stmt).scalars().all())
 
     def passage_paragraph_ids(self, passage_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[uuid.UUID]]:
         if not passage_ids:

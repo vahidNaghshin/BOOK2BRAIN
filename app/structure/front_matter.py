@@ -66,8 +66,28 @@ def is_boilerplate(text: str) -> bool:
     return bool(_STRONG_COPYRIGHT.search(text) or _WEAK_BOILERPLATE.search(text))
 
 
+# Words that make a capitalised phrase a title or subtitle rather than a person's name.
+_NOT_NAME_WORDS = frozenset(
+    "introduction guide handbook primer textbook approach perspective edition practice theory "
+    "principles applications fundamentals essentials basics foundations".split()
+)
+
+
+def _before_boilerplate(text: str) -> tuple[str, bool]:
+    """Text up to the first copyright/publisher wording, and whether there was any."""
+    match = min(
+        (m for m in (_STRONG_COPYRIGHT.search(text), _WEAK_BOILERPLATE.search(text)) if m),
+        key=lambda m: m.start(),
+        default=None,
+    )
+    return (text[: match.start()].strip(), True) if match else (text, False)
+
+
 def _looks_like_name(text: str) -> bool:
     if len(text) > 80 or any(ch.isdigit() for ch in text):
+        return False
+    words = text.split()
+    if words[0].lower() in ("a", "an", "the") or any(w.lower().strip(".,") in _NOT_NAME_WORDS for w in words):
         return False
     parts = re.split(r"\s*(?:,|&|\band\b|;)\s*", text)
     for part in parts:
@@ -212,7 +232,7 @@ def _find_subtitle_and_author(region: list[SourceBlock], guess: MetadataGuess) -
     scanned = 0
     for index in range(guess.title_block + 1, len(region)):
         block = region[index]
-        if scanned >= 6 or index in copyright_blocks:
+        if scanned >= 6:
             break
         if title_block.page is not None and block.page is not None and block.page != title_block.page:
             break
@@ -224,12 +244,17 @@ def _find_subtitle_and_author(region: list[SourceBlock], guess: MetadataGuess) -
             text = " ".join(raw.split())
             if not text:
                 continue
-            keyword = match_keyword(text)
-            if is_boilerplate(text) or (keyword is not None and keyword.node_type is not None):
+            # Parsers often merge a title-page line with the copyright notice that follows it.
+            text, has_boilerplate = _before_boilerplate(text)
+            keyword = match_keyword(text) if text else None
+            if keyword is not None and keyword.node_type is not None:
                 stop = True
-                break
-            if len(text.split()) <= 20 and not _EDITION_LINE.match(text):
+            elif text and len(text.split()) <= 20 and not _EDITION_LINE.match(text):
                 lines.append((index, text))
+            if has_boilerplate:
+                stop = True
+            if stop:
+                break
         if stop:
             break
         scanned += 1

@@ -35,3 +35,38 @@ _NODE_TYPE_LABELS = {
 
 def node_type_label(node_type: str) -> str:
     return _NODE_TYPE_LABELS.get(node_type, node_type.replace("_", " ").capitalize())
+
+
+STAGE_LABELS = {
+    "document_registration": "Registering the document",
+    "parsing": "Parsing the document",
+    "ocr": "Running OCR on scanned pages",
+    "normalizing": "Normalizing text",
+    "text_extraction": "Saving the extracted text",
+    "equation_extraction": "Extracting equations",
+    "structural_detection": "Detecting structure",
+    "paragraph_identification": "Identifying paragraphs",
+    "passage_segmentation": "Generating passages",
+    "persistence": "Saving the structure",
+    "validation": "Validating the data",
+    "completed": "Completed",
+}
+
+
+def stage_label(stage: str | None) -> str:
+    return STAGE_LABELS.get(stage or "", (stage or "").replace("_", " ").capitalize())
+
+
+def status_label(status: str, stage: str | None = None, *, incomplete: bool = False) -> str:
+    """One line a user can read: what the document is doing, or where it failed."""
+    if status == "uploaded":
+        return "Uploaded, not processed"
+    if status == "pending":
+        return "Queued"
+    if status == "processing":
+        return f"Processing: {stage_label(stage).lower()}" if stage else "Processing"
+    if status == "failed":
+        return f"Failed during {stage_label(stage).lower()}" if stage else "Failed"
+    if status == "completed":
+        return "Completed with warnings (some pages unreadable)" if incomplete else "Completed"
+    return status

@@ -13,18 +13,18 @@ from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 
 from app.config import get_settings
 from app.schemas import (
-    BookRead,
     DocumentRead,
     StructuralNodeRead,
     StructureIssueRead,
     StructureOverview,
 )
-from app.services.book_service import BookService
 from app.services.errors import ProcessingServiceError
 from app.services.structure_service import StructureService
 from app.structure.segmentation import SegmentationConfig
 from app.structure.tree import ancestor_ids, default_expanded, descendant_ids, visible_rows
 from app.ui.formatting import format_pages, format_timestamp, node_type_label
+from app.ui.navigation import NODE_KEY, goto
+from app.ui.selection import render_document_selector, safe_load_library
 from database.connection import session_scope
 
 logger = logging.getLogger(__name__)
@@ -48,17 +48,6 @@ _TOC_STYLE = (
 
 
 
-def _load_documents() -> list[tuple[BookRead, DocumentRead]]:
-    with session_scope() as session:
-        books = BookService(session).list_books()
-    return [
-        (book, document)
-        for book in books
-        for document in book.documents
-        if document.processing_status == "completed"
-    ]
-
-
 def _load_overview(document_id: uuid.UUID) -> StructureOverview:
     with session_scope() as session:
         return StructureService(session, get_settings()).get_overview(document_id)
@@ -66,24 +55,19 @@ def _load_overview(document_id: uuid.UUID) -> StructureOverview:
 
 def render_structure_page() -> None:
     st.header("Book structure")
-    try:
-        entries = _load_documents()
-    except SQLAlchemyError:
-        logger.exception("Could not load documents for the structure view")
-        st.error("Could not load documents. Check the database connection and migrations.")
+    books = safe_load_library()
+    if books is None:
         return
-    if not entries:
-        st.info("No processed documents yet. Upload a book and process it first (Processing tab).")
-        return
-
-    labels = {
-        str(document.id): f"{book.title} — {document.original_filename} ({document.file_format.upper()})"
-        for book, document in entries
-    }
-    selected = st.selectbox(
-        "Select a book", options=list(labels), format_func=lambda doc_id: labels[doc_id], key="structure_document"
+    selection = render_document_selector(
+        books, predicate=lambda d: d.document.processing_status == "completed", key="structure"
     )
-    document = next(doc for _, doc in entries if str(doc.id) == selected)
+    if selection is None:
+        st.info("No processed documents yet. Upload a book and process it first; its status is shown in the Library.")
+        if st.button("Go to Library", key="structure_go_library"):
+            goto("Library")
+        return
+    _, entry = selection
+    document = entry.document
 
     flash = st.session_state.pop("structure_flash", None)
     if flash:
@@ -270,6 +254,11 @@ def _render_toc_and_node(document: DocumentRead, overview: StructureOverview) ->
     if expanded_key not in st.session_state:
         st.session_state[expanded_key] = default_expanded(nodes)
     by_id = {n.id: n for n in nodes}
+    requested = st.session_state.pop(NODE_KEY, None)
+    if requested in by_id:
+        # Another screen asked for this node: select it and open the path to it.
+        st.session_state[selected_key] = requested
+        st.session_state[expanded_key] = set(st.session_state[expanded_key]) | set(ancestor_ids(nodes, requested))
     if st.session_state.get(selected_key) not in by_id:
         st.session_state[selected_key] = nodes[0].id
     expanded: set[uuid.UUID] = st.session_state[expanded_key]
@@ -346,6 +335,10 @@ def _render_node(
     metadata = node.metadata or {}
     if metadata.get("llm"):
         st.caption(f"LLM classification: {metadata['llm'].get('reasoning') or 'no reasoning given'}")
+
+    if sum(overview.passage_counts.get(i, 0) for i in subtree):
+        if st.button("View passages of this section", key=f"view-passages-{node.id}", type="primary"):
+            goto("Passages", document_id=document.id, node_id=node.id)
 
     children = [n for n in nodes if n.parent_id == node.id]
     contents_tab, passages_tab = st.tabs(["Paragraphs and contents", "Passages"])

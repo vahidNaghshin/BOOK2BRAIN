@@ -10,6 +10,7 @@ from database.models.processing import (
     ProcessingRunStatus,
     ProcessingStage,
 )
+from database.models.processing import RESUMABLE_STAGES
 from database.models.structure import (
     PAGE_STATUSES,
     Paragraph,
@@ -24,6 +25,7 @@ __all__ = [
     "BLOCK_TYPES",
     "EQUATION_TYPES",
     "PAGE_STATUSES",
+    "RESUMABLE_STAGES",
     "VALIDATION_STATUSES",
     "Base",
     "Book",

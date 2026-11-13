@@ -11,19 +11,16 @@ from app.services.book_service import BookService
 from app.services.document_processing_service import DocumentProcessingService
 from app.services.errors import ProcessingServiceError
 from app.services.job_runner import ProcessingJobRunner
+from app.ui.navigation import DOCUMENT_KEY
 from app.services.storage_service import get_storage
-from app.ui.formatting import format_size, format_timestamp
+from app.ui.formatting import STAGE_LABELS, format_size, format_timestamp, stage_label
 from database.connection import session_scope
 
 logger = logging.getLogger(__name__)
 
 PREVIEW_PAGE_SIZE = 20
 POLL_SECONDS = 2
-_STAGE_LABELS = {
-    "parsing": "Parsing the document",
-    "ocr": "Running OCR on scanned pages",
-    "normalizing": "Normalizing text",
-}
+_STAGE_LABELS = STAGE_LABELS
 
 
 @st.cache_resource
@@ -63,12 +60,17 @@ def render_processing_page() -> None:
         )
         for book, document in entries
     }
+    options = list(labels)
+    wanted = st.session_state.get(DOCUMENT_KEY)
+    if wanted in options and st.session_state.get("processing_document") != wanted:
+        st.session_state["processing_document"] = wanted
     selected = st.selectbox(
         "Select a document",
-        options=list(labels),
+        options=options,
         format_func=lambda doc_id: labels[doc_id],
         key="processing_document",
     )
+    st.session_state[DOCUMENT_KEY] = selected
     document_id = uuid.UUID(selected)
     document = next(doc for _, doc in entries if doc.id == document_id)
 
@@ -141,19 +143,27 @@ def _render_failed(document: DocumentRead, info: ProcessingInfo) -> None:
     st.error(f"Processing failed. {run.error_message if run and run.error_message else ''}".strip())
     failed_stage = run.stage if run else None
     if failed_stage:
-        st.caption(f"Failed during: {_STAGE_LABELS.get(failed_stage, failed_stage)}")
+        st.caption(f"Failed during: {stage_label(failed_stage)}")
+    if run and run.text_completed_at and failed_stage not in ("document_registration", "parsing", "ocr", "normalizing"):
+        st.info("The extracted text was saved, so retrying continues from the failed stage without parsing the file again.")
 
+    # Technical diagnostics (including tracebacks) stay in the database and the application log.
     run_errors = [e for e in info.errors if run and e.processing_run_id == run.id]
     for error in run_errors:
         with st.expander(f"{error.error_type}: {error.error_message[:120]}"):
             st.write(error.error_message)
-            details = {k: v for k, v in (error.details or {}).items() if k != "traceback"}
+            details = {k: v for k, v in (error.details or {}).items() if k not in ("traceback", "issues")}
+            if error.stage:
+                details = {"stage": error.stage, "attempt": error.retry_attempt, **details}
             if details:
                 st.json(details)
-            if error.details and error.details.get("traceback"):
-                st.code(error.details["traceback"], language="text")
+            for issue in (error.details or {}).get("issues", []):
+                st.markdown(f"- **{issue.get('code')}**: {issue.get('message')}")
+    st.caption("Developer details are in the application log.")
+    if run and run.retry_count:
+        st.caption(f"{run.retry_count} retry attempt(s) of this run.")
     if info.run_count > 1:
-        st.caption(f"{info.run_count} attempts so far.")
+        st.caption(f"{info.run_count} runs so far.")
     if st.button("Retry processing", type="primary", key=f"retry-{document.id}"):
         _start(document.id)
 
@@ -170,6 +180,7 @@ def _render_completed(document: DocumentRead, info: ProcessingInfo) -> None:
     else:
         st.success("Processed successfully.")
 
+    _render_stages(run)
     cols = st.columns(4)
     cols[0].metric("Characters", f"{summary.character_count:,}")
     cols[1].metric("Pages", summary.page_count if summary.page_count is not None else "n/a")
@@ -189,6 +200,24 @@ def _render_completed(document: DocumentRead, info: ProcessingInfo) -> None:
                 st.markdown(f"- **{warning.code}** — {prefix}{warning.message}")
 
     _render_preview(document)
+
+
+def _render_stages(run) -> None:
+    """Per-stage outcomes of the pipeline, including validation warnings."""
+    results = run.stage_results or {}
+    if not results:
+        return
+    with st.expander("Processing stages"):
+        for name in STAGE_LABELS:
+            entry = results.get(name)
+            if not entry:
+                continue
+            extra = {k: v for k, v in entry.items() if k not in ("status", "started_at", "finished_at", "issues", "sha256")}
+            st.markdown(f"- **{stage_label(name)}**: {entry.get('status')}" + (f" · {extra}" if extra else ""))
+        for issue in (results.get("validation") or {}).get("issues", []):
+            st.markdown(f"  - ⚠️ {issue.get('code')}: {issue.get('message')}")
+    if run.started_at and run.completed_at:
+        st.caption(f"Started {format_timestamp(run.started_at)} · finished {format_timestamp(run.completed_at)}")
 
 
 def _render_ocr(document: DocumentRead, summary) -> None:

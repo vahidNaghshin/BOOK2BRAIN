@@ -71,6 +71,16 @@ class ProcessingRepository:
             .values(stage=stage, progress_current=current, progress_total=total)
         )
 
+    def set_retry_count(self, run_id: uuid.UUID, retry_count: int) -> None:
+        self.session.execute(update(ProcessingRun).where(ProcessingRun.id == run_id).values(retry_count=retry_count))
+
+    def clear_progress(self, run_id: uuid.UUID) -> None:
+        self.session.execute(
+            update(ProcessingRun)
+            .where(ProcessingRun.id == run_id)
+            .values(progress_current=None, progress_total=None)
+        )
+
     def add_error(
         self,
         *,
@@ -79,11 +89,15 @@ class ProcessingRepository:
         error_type: str,
         message: str,
         details: dict[str, Any] | None,
+        stage: str | None = None,
+        retry_attempt: int = 0,
     ) -> ProcessingError:
         error = ProcessingError(
             document_id=document_id,
             processing_run_id=run_id,
             error_type=error_type,
+            stage=stage or (details or {}).get("stage"),
+            retry_attempt=retry_attempt,
             error_message=message,
             details=details or None,
         )

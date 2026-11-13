@@ -352,3 +352,115 @@ def make_math_pdf(
         else:
             document.insert_pdf(page_pdf)
     return document.tobytes()
+
+
+class _BookWriter:
+    """Lays text out on PDF pages line by line, so a paragraph can run across a page break."""
+
+    WIDTH, HEIGHT, MARGIN = 595, 842, 72
+
+    def __init__(self) -> None:
+        self.document = pymupdf.open()
+        self.page = None
+        self.y = 0.0
+        self.new_page()
+
+    def new_page(self) -> None:
+        self.page = self.document.new_page(width=self.WIDTH, height=self.HEIGHT)
+        self.y = self.MARGIN
+
+    def _line(self, text: str, size: float, font: str, indent: float = 0.0) -> None:
+        if self.y + size > self.HEIGHT - self.MARGIN:
+            self.new_page()
+        self.page.insert_text((self.MARGIN + indent, self.y + size), text, fontsize=size, fontname=font)
+        self.y += size * 1.35
+
+    def gap(self, points: float) -> None:
+        self.y += points
+
+    def heading(self, text: str, size: float, *, space_before: float = 18) -> None:
+        self.gap(space_before)
+        if self.y + size * 3 > self.HEIGHT - self.MARGIN:  # never leave a heading at the foot of a page
+            self.new_page()
+        self._line(text, size, "hebo")
+        self.gap(size * 0.5)
+
+    def paragraph(self, text: str, size: float = 11) -> None:
+        width = self.WIDTH - 2 * self.MARGIN
+        line = ""
+        for word in text.split():
+            candidate = f"{line} {word}".strip()
+            if pymupdf.get_text_length(candidate, fontname="helv", fontsize=size) > width and line:
+                self._line(line, size, "helv")
+                line = word
+            else:
+                line = candidate
+        if line:
+            self._line(line, size, "helv")
+        self.gap(size * 0.8)
+
+
+def book_pdf_blocks() -> list[tuple]:
+    """The content of the sample book as (kind, text, size/arg) tuples; see `make_book_pdf`."""
+    from tests.structure_helpers import prose
+
+    def body(seed: int, tokens: int = 160) -> tuple:
+        return ("p", prose(tokens, seed))
+
+    return [
+        ("title_page",),
+        ("copyright",),
+        ("page_break",),
+        ("contents",),
+        ("page_break",),
+        ("h1", "Preface"), body(1), body(2),
+        ("page_break",),
+        ("h1", "1. Foundations"), body(3),
+        ("h2", "1.1 Signals"), body(4), body(5, 520),  # long enough to run over a page
+        ("h2", "1.2 Systems"), body(6),
+        ("page_break",),
+        ("h1", "2. Learning"), body(7),
+        ("h2", "2.1 Gradient Methods"), body(8), body(9),
+        ("h2", "2.2 Evaluation"), body(10),
+        ("page_break",),
+        ("h1", "Appendix A \u2014 Proofs"), body(11),
+        ("page_break",),
+        ("h1", "References"), body(12, 100),
+    ]
+
+
+BOOK_TITLE = "Principles of Signal Learning"
+BOOK_CHAPTERS = [("1", "Foundations"), ("2", "Learning")]
+BOOK_SECTIONS = ["1.1", "1.2", "2.1", "2.2"]
+
+
+def make_book_pdf() -> bytes:
+    """A realistic digital book: title page, copyright, contents, preface, two numbered chapters
+    with sections (one paragraph runs across a page break), an appendix and references."""
+    writer = _BookWriter()
+    for entry in book_pdf_blocks():
+        kind = entry[0]
+        if kind == "title_page":
+            writer.gap(160)
+            writer._line(BOOK_TITLE, 30, "hebo")
+            writer.gap(10)
+            writer._line("A Practical Introduction", 16, "helv")
+            writer.gap(40)
+            writer._line("by Maria Oliveira", 14, "helv")
+            writer.new_page()
+        elif kind == "copyright":
+            writer.gap(500)
+            writer.paragraph("Copyright \u00a9 2024 Open Press. All rights reserved. ISBN 978-1-23456-789-7.", 9)
+        elif kind == "contents":
+            writer.heading("Contents", 22, space_before=0)
+            for line in ("Preface ........ 4", "1. Foundations ........ 5", "2. Learning ........ 7", "References ........ 9"):
+                writer.paragraph(line)
+        elif kind == "page_break":
+            writer.new_page()
+        elif kind == "h1":
+            writer.heading(entry[1], 20, space_before=0 if writer.y == writer.MARGIN else 24)
+        elif kind == "h2":
+            writer.heading(entry[1], 14)
+        elif kind == "p":
+            writer.paragraph(entry[1])
+    return writer.document.tobytes()

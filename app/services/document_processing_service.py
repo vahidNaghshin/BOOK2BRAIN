@@ -171,9 +171,18 @@ class DocumentProcessingService:
         return run.id
 
     def execute(
-        self, run_id: uuid.UUID, on_progress: RunProgressCallback | None = None
+        self,
+        run_id: uuid.UUID,
+        on_progress: RunProgressCallback | None = None,
+        *,
+        finalize: bool = True,
     ) -> ProcessingRunRead:
-        """Run a queued run to completion. Document problems end in a failed run, not an exception."""
+        """Run a queued run to completion. Document problems end in a failed run, not an exception.
+
+        With `finalize=False` only the text stage is completed: the run and document stay
+        "processing" after the text and equations are saved, for a pipeline that goes on to detect
+        structure and only then marks the run completed.
+        """
         run = self.runs.get_run(run_id)
         if run is None:
             raise ProcessingServiceError("The processing run does not exist.")
@@ -195,9 +204,11 @@ class DocumentProcessingService:
                 if result.status is ExtractionStatus.FAILED:
                     self._record_failure(run_id, document_id, result.errors)
                 else:
-                    block_ids = self._record_success(run_id, document_id, result)
+                    block_ids = self._record_success(run_id, document_id, result, finalize=finalize)
                     text_saved = True
                     # Equations come after the text is safely stored and never affect its status.
+                    if not finalize and self.settings.equation_extraction_enabled:
+                        self._set_stage(run_id, ProcessingStage.EQUATION_EXTRACTION)
                     self._extract_equations(run_id, document, path, result, block_ids)
         except Exception as exc:
             if text_saved:
@@ -330,11 +341,18 @@ class DocumentProcessingService:
 
     # -- internals: persistence ----------------------------------------------------
 
-    def _record_success(
-        self, run_id: uuid.UUID, document_id: uuid.UUID, result: ParsingResult
-    ) -> dict[int, uuid.UUID]:
-        """Replace the document's blocks and complete the run in a single transaction.
+    def _set_stage(self, run_id: uuid.UUID, stage: ProcessingStage) -> None:
+        self.runs.update_progress(run_id, stage=stage.value, current=0, total=0)
+        self.runs.clear_progress(run_id)
+        self.session.commit()
 
+    def _record_success(
+        self, run_id: uuid.UUID, document_id: uuid.UUID, result: ParsingResult, *, finalize: bool = True
+    ) -> dict[int, uuid.UUID]:
+        """Replace the document's blocks and save the text outcome in a single transaction.
+
+        With `finalize` the run and document are completed too; otherwise they stay "processing"
+        with `text_completed_at` set, which is what lets a later failure resume without parsing.
         Returns the new block ids by sequence number, so equations can link to their blocks.
         """
         block_ids = {block.sequence_number: uuid.uuid4() for block in result.blocks}
@@ -353,15 +371,19 @@ class DocumentProcessingService:
             metadata=result.metadata,
         )
         run = self._load_run(run_id)
-        run.status = ProcessingRunStatus.COMPLETED.value
-        run.completed_at = utcnow()
         run.error_message = None
-        # A finished run has no active stage (failed runs keep theirs: it says where they failed).
-        run.stage = None
         run.progress_current = None
         run.progress_total = None
         run.result_summary = summary.model_dump(mode="json")
-        self._load_document(document_id).processing_status = ProcessingStatus.COMPLETED.value
+        run.text_completed_at = utcnow()
+        if finalize:
+            run.status = ProcessingRunStatus.COMPLETED.value
+            run.completed_at = utcnow()
+            # A finished run has no active stage (failed runs keep theirs: it says where they failed).
+            run.stage = None
+            self._load_document(document_id).processing_status = ProcessingStatus.COMPLETED.value
+        else:
+            run.stage = ProcessingStage.TEXT_EXTRACTION.value
         self.session.commit()
         logger.info(
             "Processing run %s completed: %d blocks, %d characters, status=%s",
@@ -389,6 +411,8 @@ class DocumentProcessingService:
                 error_type=issue.code,
                 message=issue.message,
                 details=details,
+                stage=run.stage,
+                retry_attempt=run.retry_count or 0,
             )
         self._load_document(document_id).processing_status = ProcessingStatus.FAILED.value
         self.session.commit()

@@ -11,6 +11,7 @@ from app.parsing.equation.equation_service import EquationService
 from app.parsing.parser_factory import ParserFactory
 from app.services.document_processing_service import DocumentProcessingService
 from app.services.errors import ProcessingNotAllowedError
+from app.services.pipeline_service import ProcessingPipeline
 from app.services.storage_service import StorageBackend, get_storage
 from database.connection import session_scope
 
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class ProcessingJobRunner:
-    """Runs document processing in a background worker thread.
+    """Runs the processing pipeline in a background worker thread.
 
     `submit` validates and queues the run in the caller's thread, so problems such as
     "already processing" surface immediately; the heavy work then happens on the worker.
@@ -47,11 +48,19 @@ class ProcessingJobRunner:
             session, self._storage, self.settings, self._parser_factory, self._equation_service
         )
 
+    def _pipeline(self, session: Session) -> ProcessingPipeline:
+        return ProcessingPipeline(
+            session, self._storage, self.settings, self._parser_factory, self._equation_service
+        )
+
     def submit(self, document_id: uuid.UUID) -> uuid.UUID:
+        """Queue the whole pipeline (or resume a failed run) for a document."""
         with self._session_factory() as session:
-            run_id = self._service(session).start(document_id)
+            run_id = self._pipeline(session).start(document_id)
         self._executor.submit(self._run, run_id)
         return run_id
+
+    retry = submit  # a failed document is retried the same way it is started
 
     def submit_equations(self, document_id: uuid.UUID) -> None:
         """Queue equation extraction for an already processed document."""
@@ -77,7 +86,7 @@ class ProcessingJobRunner:
     def _run(self, run_id: uuid.UUID) -> None:
         try:
             with self._session_factory() as session:
-                self._service(session).execute(run_id)
+                self._pipeline(session).execute(run_id)
         except Exception:
             logger.exception("Background processing of run %s crashed", run_id)
 
