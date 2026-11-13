@@ -139,29 +139,8 @@ def test_processing_documents_show_their_stage_and_cannot_be_deleted(
 
     assert any("Generating passages" in p.proto.text for p in at.get("progress"))
     assert next(b for b in at.button if b.key == f"library_delete_{busy.id}").disabled
-    book_id = session.scalar(select(Book.id))
-    assert button(at, f"library_delete_book_{book_id}").disabled
     rows = [r for t in at.dataframe for r in t.value.to_dict("records")]
     assert rows[0]["Status"] == "Processing: generating passages"
-
-
-def test_a_whole_book_can_be_deleted_from_the_library(
-    session, document_service, storage, settings, engine, monkeypatch, runner
-) -> None:
-    one = upload(document_service, "u7", title="Same Book", author="X")
-    two = upload(document_service, "u8", title="Same Book", author="X")
-    patch_ui(monkeypatch, engine, settings, storage, runner)
-    at = run_app()
-
-    book_id = session.scalar(select(Book.id))
-    button(at, f"library_delete_book_{book_id}").click().run()
-    assert any("cannot be undone" in w.value for w in at.warning)
-    button(at, f"library_delete_book_yes_{book_id}").click().run()
-
-    session.rollback()
-    assert session.scalars(select(Book)).all() == []
-    assert not storage.exists(one.file_path) and not storage.exists(two.file_path)
-    assert any("library is empty" in i.value for i in at.info)
 
 
 # -- editions --------------------------------------------------------------------------------------

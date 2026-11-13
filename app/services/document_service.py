@@ -177,28 +177,6 @@ class DocumentService:
         logger.info("Deleted document %s ('%s')%s", document_id, title, " and its book" if book_deleted else "")
         return book_deleted
 
-    def delete_book(self, book_id: uuid.UUID) -> int:
-        """Delete a book with all its documents (and their derived data and files).
-
-        Refused, changing nothing, if any of its documents is being processed. Returns the
-        number of documents deleted.
-        """
-        book = self.session.get(Book, book_id)
-        if book is None:
-            raise DocumentNotFoundError("The book no longer exists.")
-        documents = list(self.session.scalars(select(Document).where(Document.book_id == book_id)))
-        busy = [d for d in documents if d.processing_status in (ProcessingStatus.PENDING.value, ProcessingStatus.PROCESSING.value)]
-        if busy:
-            raise ProcessingNotAllowedError(
-                "A document of this book is being processed. Delete it after processing finishes."
-            )
-        for document in documents:
-            self.delete_document(document.id)
-        if self.session.get(Book, book_id) is not None:  # a book with no documents
-            self.session.delete(self.session.get(Book, book_id))
-            self.session.commit()
-        return len(documents)
-
     def _raise_if_duplicate(self, sha256: str) -> None:
         existing = self.documents.get_by_hash(sha256)
         if existing is not None:

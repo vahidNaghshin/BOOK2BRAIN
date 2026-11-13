@@ -130,8 +130,6 @@ def _render_book(item: LibraryBook) -> None:
         selected = next(d for d in item.documents if str(d.document.id) == chosen)
         _render_document(item, selected)
 
-    _render_delete_book(item)
-
 
 def _progress_fraction(stage: str | None) -> float:
     if stage in _STAGE_ORDER:
@@ -227,27 +225,6 @@ def _render_delete_document(item: LibraryBook, entry: LibraryDocument, column) -
         st.session_state.pop(confirm_key, None)
         _delete(lambda service: service.delete_document(document.id), document.id)
     if no.button("Cancel", key=f"library_delete_no_{document.id}"):
-        st.session_state.pop(confirm_key, None)
-        st.rerun()
-
-
-def _render_delete_book(item: LibraryBook) -> None:
-    book = item.book
-    confirm_key = f"library_confirm_delete_book_{book.id}"
-    if not st.session_state.get(confirm_key):
-        if st.button("Delete this book", key=f"library_delete_book_{book.id}", disabled=item.has_active):
-            st.session_state[confirm_key] = True
-            st.rerun()
-        return
-    st.warning(
-        f"Delete **{book.title}** and all {len(item.documents)} of its document(s), with their text, "
-        "structure and passages? This cannot be undone."
-    )
-    yes, no = st.columns(2)
-    if yes.button("Yes, delete the book", key=f"library_delete_book_yes_{book.id}", type="primary"):
-        st.session_state.pop(confirm_key, None)
-        _delete(lambda service: service.delete_book(book.id), None)
-    if no.button("Cancel", key=f"library_delete_book_no_{book.id}"):
         st.session_state.pop(confirm_key, None)
         st.rerun()
 

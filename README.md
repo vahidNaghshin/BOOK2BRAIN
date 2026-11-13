@@ -105,7 +105,7 @@ streamlit run app/main.py
 
 Open http://localhost:8501. The page shows the title, version and database status, and a screen selector:
 
-- **Library** — every book and document with its status and current stage, the editions of each book, and actions: open the structure or passages, start/retry processing, see details, delete. It refreshes itself while anything is processing.
+- **Library** — every book and document with its status and current stage, the editions of each book, and actions: open the structure or passages, start/retry processing, see details, delete a document (deleting a book's last document removes the book). It refreshes itself while anything is processing.
 - **Upload** — choose a PDF, EPUB or DOCX file, enter the book metadata (title is required; author, subtitle, publisher, year, ISBN, language and description are optional) and upload. **Start processing after upload** is on by default.
 - **Structure** — the explorer: pick a book and one of its documents, expand and collapse the hierarchy, select a chapter or section. See [Book structure](#book-structure-and-passages).
 - **Passages** — the viewer: pick a chapter and section, open a passage, read it in full with its page references and move to the previous/next one.
