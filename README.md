@@ -307,6 +307,31 @@ Detection replaces a document's nodes, paragraphs and passages in one transactio
 
 The LLM works with any OpenAI-compatible `/chat/completions` endpoint (hosted, or a local server such as Ollama or vLLM): set `STRUCTURE_LLM_ENABLED=true`, `STRUCTURE_LLM_MODEL` and, for hosted services, `STRUCTURE_LLM_BASE_URL` and `STRUCTURE_LLM_API_KEY`. Without them, no network call is ever made.
 
+## Knowledge model (Phase 2)
+
+Phase 2 turns passages into reusable knowledge. Day 1 provides the data model and validation only: **no extraction runs yet** and nothing is wired into the UI.
+
+**Categories** (`app/knowledge/types.py`): concept, principle, method, framework, evidence, example, equation.
+
+**Typed content.** Each category has its own validated Pydantic model in `app/knowledge/content.py` (for example a concept has a name, definition, explanation, characteristics, related concepts and examples; a method has purpose, preconditions, ordered steps, inputs, outputs, expected results and limitations). Models forbid unknown fields, trim text, reject blank required text and never use `None` for lists. `knowledge_type` identifies the category when content is read from JSON.
+
+**Common envelope.** `KnowledgeUnitCreate` in `app/knowledge/schemas.py` wraps any content with what all units share: a UUID, book and document, one or more source passages (each `primary` or `supporting`, optionally with the quoted words), chapter and section, page range and page status, confidence (0-1, optional), explicit uncertainty, validation status, review status and JSON metadata. `KnowledgeRelationshipCreate` and `ExtractionRunCreate`/`ExtractionRunRead` follow the same pattern. `app/knowledge/records.py` converts between these schemas and the database records.
+
+**Storage.**
+
+| Table | Notes |
+|---|---|
+| `knowledge_units` | `details` (JSONB) holds the full typed content; `title`, `content` and `summary` are projections kept as columns for listing and search. `schema_version` versions the content format. The page range is stored on the unit itself. |
+| `knowledge_unit_passages` | Many-to-many to `passages`, with position, role and quote. At most one `primary` per unit. |
+| `knowledge_relationships` | `source <type> target`, with explanation, confidence and run. Both ends must belong to the same book (enforced by a composite foreign key). No self links; one row per source, target and type. |
+| `extraction_runs` | Scope (book, optionally document and chapter/section), status (`pending`, `processing`, `completed`, `failed`, `cancelled`), passages processed, units extracted, failure count, free-text model name and prompt version, times and error. |
+
+**Relationship types** (`app/knowledge/relationships.py`): `supports` (evidence → concept/principle/method/framework), `illustrates` (example → ...), `implements` (method → framework/principle), `describes` (equation → ...), `part_of`, `depends_on`, `contradicts`, `related_to`. The allowed type combinations are checked with `check_relationship_types`; the database stores any combination of units in the same book.
+
+**Equations are never pretended to be complete.** An equation keeps its `original_expression` as extracted and an optional `latex`; at least one is required. `extraction_status` (`complete`, `partial`, `ambiguous`, `failed`) has no default, and `reconstruction_status` records whether a clean form was rebuilt. An incomplete equation is marked uncertain automatically and cannot be validated as `valid`.
+
+**Relation to Phase 1.** Knowledge survives regeneration of Phase 1 data. Deleting a document or book deletes its knowledge. Regenerating structure clears a unit's chapter/section references, and regenerating passages removes its passage links, but the unit stays and keeps its page range; `KnowledgeUnitRead.sources` is then empty (a unit whose sources were lost can be found by the missing links). New units must cite at least one passage. Apply the tables with `alembic upgrade head`; downgrading removes them (and any extracted knowledge) without touching Phase 1 data.
+
 ## Architecture
 
 ```
@@ -335,6 +360,9 @@ Streamlit screens (app/ui)  ->  services  ->  repositories  ->  PostgreSQL
 | `paragraphs` | Source paragraphs of a node. |
 | `passages`, `passage_paragraphs` | Derived passages and the paragraphs each was built from (ordered, many-to-many, with overlap flags). |
 | `structure_analyses` | One per document: structure and passage status, summaries and validation findings. |
+| `extraction_runs` | Phase 2: one knowledge-extraction execution over a book, document or section: status, counts, model and prompt version, times, error. |
+| `knowledge_units`, `knowledge_unit_passages` | Phase 2: extracted knowledge of any category and the passages supporting it (one or many). |
+| `knowledge_relationships`, `knowledge_relationship_passages` | Phase 2: typed links between knowledge units of one book, with the passages that show them. |
 
 ### Book versus document
 
@@ -454,11 +482,14 @@ app/
                    equation_extractor.py (EPUB/DOCX), equation_ocr.py (math OCR engines),
                    latex_normalizer.py, equation_validator.py, mathml_converter.py,
                    equation_detector.py, math_symbols.py, equation_models.py
+  knowledge/       Phase 2 (no database access except records.py): types.py, content.py (typed content per
+                   category), schemas.py (common envelope, relationships, runs), relationships.py, records.py
   repositories/    Database queries
 database/
   connection.py    Engine, sessions, connection check
   models/          SQLAlchemy models (Book, Document, ProcessingRun, ProcessingError, ExtractedBlock, Equation,
-                   StructuralNode, Paragraph, Passage, PassageParagraph, StructureAnalysis)
+                   StructuralNode, Paragraph, Passage, PassageParagraph, StructureAnalysis,
+                   KnowledgeUnit, KnowledgeUnitPassage, KnowledgeRelationship, ExtractionRun)
   migrations/      Alembic migrations (configured by alembic.ini)
   init/            Scripts run when the Docker database is first created
 ingestion/         Reserved for later phases
@@ -474,7 +505,7 @@ The layers are kept separate: the UI calls services, services call parsers, repo
 - A completed document cannot be re-processed from scratch yet (for example after changing OCR settings); only failed documents can be retried. Structure and passages can be rebuilt from its stored text.
 - Processing runs in one background thread of the app process (no task queue): one document at a time, and restarting the app interrupts a run (it can be retried and resumed).
 - No cover images or automatic publisher/year extraction: publisher, year and ISBN come from the upload form.
-- Phase 1 stops at passages. Knowledge graphs, concept extraction, chat/RAG retrieval, equation reconstruction, equation-to-Python generation and semantic search are not implemented.
+- Phase 1 stops at passages; Phase 2 so far has only the knowledge data model (no extraction, UI or repositories yet). Knowledge graphs, concept extraction, chat/RAG retrieval, equation reconstruction, equation-to-Python generation and semantic search are not implemented.
 - The sample book used by the `sample_book` tests is not part of the repository; those tests are skipped when `storage/original` has no suitable PDF (the end-to-end test uses a generated book instead).
 - Structure detection is heuristic. It works from the headings, sizes and positions Docling reports; books whose headings are not marked up (plain text, scans with poor layout analysis) produce more ambiguous nodes, and the optional LLM only classifies candidates the heuristics already found. A two-line title page that the parser merges into one block is split only when the author's name appears elsewhere in the opening pages. Headings the parser mislabels (formulas, pseudocode) can still appear as nodes, usually flagged ambiguous. Page headers repeated on three or more nearby pages are ignored as headings.
 - Structure and passages are rebuilt for the whole document at once; they cannot be edited by hand yet. Overlap is taken from prose paragraphs only. Passage token counts are approximate unless `tiktoken` is used.

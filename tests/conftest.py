@@ -25,6 +25,8 @@ from app.services.storage_service import LocalStorage
 from database.connection import build_engine
 
 TABLES = (
+    "knowledge_relationship_passages, knowledge_relationships, knowledge_unit_passages, knowledge_units, "
+    "extraction_runs, "
     "passage_paragraphs, passages, paragraphs, structural_nodes, structure_analyses, "
     "equations, extracted_blocks, processing_errors, processing_runs, documents, books"
 )
