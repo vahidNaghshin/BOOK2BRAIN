@@ -57,3 +57,23 @@ class StructureServiceError(ProcessingServiceError):
 
 class StructureNotAllowedError(StructureServiceError):
     """The document is not in a state that allows structure detection (it must be processed)."""
+
+
+class ExtractionRunError(Exception):
+    """A knowledge extraction run could not be started or continued. The message is safe to show to users."""
+
+
+class ExtractionScopeError(ExtractionRunError):
+    """The requested book, chapter or section does not exist or is of the wrong kind."""
+
+
+class KnowledgeNotFoundError(Exception):
+    """The knowledge unit does not exist (any more). The message is safe to show to users."""
+
+
+class InvalidReviewError(Exception):
+    """The review status is not one of the allowed values."""
+
+
+class RelationshipError(Exception):
+    """A relationship cannot be stored or found. The message is safe to show to users."""

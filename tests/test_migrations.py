@@ -16,7 +16,7 @@ from tests.conftest import alembic_config, derive_test_url, ensure_database, mig
 EXPECTED_TABLES = {
     "books", "documents", "processing_runs", "processing_errors", "extracted_blocks", "equations",
     "structural_nodes", "paragraphs", "passages", "passage_paragraphs", "structure_analyses",
-    "extraction_runs", "knowledge_units", "knowledge_unit_passages", "knowledge_relationships",
+    "extraction_runs", "extraction_executions", "extraction_attempts", "knowledge_units", "knowledge_unit_passages", "knowledge_relationships",
     "knowledge_relationship_passages",
 }
 KNOWLEDGE_TABLES = {t for t in EXPECTED_TABLES if t.startswith(("knowledge_", "extraction_"))}

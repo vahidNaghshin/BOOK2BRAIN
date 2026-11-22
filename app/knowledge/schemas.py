@@ -10,17 +10,20 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints, TypeAdapter, model_validator
 
 from app.knowledge.content import AnyKnowledgeContent, EquationContent, KnowledgeContent
 from app.knowledge.types import (
     ExtractionRunStatus,
+    KnowledgeOrigin,
     KnowledgeType,
     PageStatus,
+    RelationshipOrigin,
     RelationshipType,
     ReviewStatus,
+    SourceVerificationStatus,
     SourceRole,
     ValidationStatus,
 )
@@ -78,6 +81,7 @@ class KnowledgeUnitCreate(_Model):
     page_start: Page | None = None
     page_end: Page | None = None
     page_status: PageStatus = PageStatus.UNKNOWN
+    origin: KnowledgeOrigin = KnowledgeOrigin.AI_EXTRACTED
     # The Phase 1 equation record this unit was built from (equations only).
     equation_id: uuid.UUID | None = None
 
@@ -127,6 +131,7 @@ class KnowledgeUnitRead(KnowledgeUnitCreate):
     # links but keeps the knowledge (and its page range). New units must still cite a source.
     sources: Annotated[list[SourceReference], Field(default_factory=list, max_length=MAX_SOURCES)]
     schema_version: int
+    source_status: SourceVerificationStatus = SourceVerificationStatus.UNVERIFIED
     created_at: datetime
     updated_at: datetime
 
@@ -147,8 +152,13 @@ class KnowledgeRelationshipCreate(_Model):
     explanation: Note | None = None
     confidence: Confidence | None = None
     extraction_run_id: uuid.UUID | None = None
+    extraction_execution_id: uuid.UUID | None = None
     # Passages where the book connects the two units, when known.
     source_passage_ids: Annotated[list[uuid.UUID], Field(default_factory=list, max_length=MAX_SOURCES)]
+    # "extracted" needs evidence from the book (a quote); "ai_suggested" is a proposal to review.
+    origin: RelationshipOrigin = RelationshipOrigin.MANUAL
+    review_status: ReviewStatus = ReviewStatus.UNREVIEWED
+    evidence_quote: Quote | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> KnowledgeRelationshipCreate:
@@ -156,6 +166,8 @@ class KnowledgeRelationshipCreate(_Model):
             raise ValueError("A unit cannot be related to itself")
         if len(set(self.source_passage_ids)) != len(self.source_passage_ids):
             raise ValueError("A passage can only be listed once")
+        if self.origin == RelationshipOrigin.EXTRACTED and not (self.source_passage_ids and self.evidence_quote):
+            raise ValueError("An extracted relationship needs the passage and the quoted evidence that support it")
         return self
 
 
@@ -174,6 +186,10 @@ class ExtractionRunCreate(_Model):
     model_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)] | None = None
     prompt_version: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)] | None = None
     parameters: dict[str, JsonValue] = Field(default_factory=dict)
+    scope_type: Literal["book", "document", "chapter", "section"] | None = None
+    model_configuration_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)] | None = None
+    provider: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)] | None = None
+    model_snapshot: dict[str, JsonValue] | None = None
 
     @model_validator(mode="after")
     def _node_needs_document(self) -> ExtractionRunCreate:
@@ -192,6 +208,17 @@ class ExtractionRunRead(ExtractionRunCreate):
     error_code: str | None = None
     error_message: str | None = None
     error_details: dict[str, JsonValue] | None = None
+    total_passages: Annotated[int, Field(ge=0)] = 0
+    needs_review_count: Annotated[int, Field(ge=0)] = 0
+    skipped_count: Annotated[int, Field(ge=0)] = 0
+    duplicate_count: Annotated[int, Field(ge=0)] = 0
+    attempt_count: Annotated[int, Field(ge=0)] = 0
+    retry_count: Annotated[int, Field(ge=0)] = 0
+    validation_failure_count: Annotated[int, Field(ge=0)] = 0
+    input_tokens: Annotated[int, Field(ge=0)] | None = None
+    output_tokens: Annotated[int, Field(ge=0)] | None = None
+    estimated_cost_usd: Annotated[float, Field(ge=0)] | None = None
+    relationships_extracted: Annotated[int, Field(ge=0)] = 0
     created_at: datetime
     updated_at: datetime
 

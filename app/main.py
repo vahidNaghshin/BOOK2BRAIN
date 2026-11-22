@@ -10,6 +10,8 @@ from app import __version__
 from app.config import get_settings
 from app.logging_config import configure_logging
 from app.ui.equations import render_equations_page
+from app.ui.extraction import render_extraction_page
+from app.ui.knowledge import render_knowledge_page
 from app.ui.library import render_library_page
 from app.ui.navigation import render_navigation
 from app.ui.passages import render_passages_page
@@ -27,6 +29,8 @@ SCREENS = {
     "Passages": render_passages_page,
     "Processing": render_processing_page,
     "Equations": render_equations_page,
+    "Extraction": render_extraction_page,
+    "Knowledge": render_knowledge_page,
 }
 
 

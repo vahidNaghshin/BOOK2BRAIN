@@ -14,6 +14,8 @@ UI_MODULES = (
     "app.ui.processing",
     "app.ui.upload",
     "app.ui.equations",
+    "app.ui.extraction",
+    "app.ui.knowledge",
 )
 
 
@@ -44,6 +46,8 @@ def patch_ui(monkeypatch, engine: Engine, settings, storage, runner=None) -> Non
 def full_app() -> None:
     """The application as main.py wires it: a screen selector and the chosen screen."""
     from app.ui.equations import render_equations_page
+    from app.ui.extraction import render_extraction_page
+    from app.ui.knowledge import render_knowledge_page
     from app.ui.library import render_library_page
     from app.ui.navigation import render_navigation
     from app.ui.passages import render_passages_page
@@ -58,6 +62,8 @@ def full_app() -> None:
         "Passages": render_passages_page,
         "Processing": render_processing_page,
         "Equations": render_equations_page,
+        "Extraction": render_extraction_page,
+        "Knowledge": render_knowledge_page,
     }
     screens[render_navigation()]()
 

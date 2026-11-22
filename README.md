@@ -309,7 +309,7 @@ The LLM works with any OpenAI-compatible `/chat/completions` endpoint (hosted, o
 
 ## Knowledge model (Phase 2)
 
-Phase 2 turns passages into reusable knowledge. Day 1 provides the data model and validation only: **no extraction runs yet** and nothing is wired into the UI.
+Phase 2 turns passages into reusable knowledge. Day 1 provides the data model and validation, Day 2 the LLM extraction layer (`app/extraction`) and Day 3 the pipeline that runs it over stored passages, with the *Extraction* screen and a command line (see below). There is no knowledge browser, search or relationship extraction yet.
 
 **Categories** (`app/knowledge/types.py`): concept, principle, method, framework, evidence, example, equation.
 
@@ -324,13 +324,156 @@ Phase 2 turns passages into reusable knowledge. Day 1 provides the data model an
 | `knowledge_units` | `details` (JSONB) holds the full typed content; `title`, `content` and `summary` are projections kept as columns for listing and search. `schema_version` versions the content format. The page range is stored on the unit itself. |
 | `knowledge_unit_passages` | Many-to-many to `passages`, with position, role and quote. At most one `primary` per unit. |
 | `knowledge_relationships` | `source <type> target`, with explanation, confidence and run. Both ends must belong to the same book (enforced by a composite foreign key). No self links; one row per source, target and type. |
-| `extraction_runs` | Scope (book, optionally document and chapter/section), status (`pending`, `processing`, `completed`, `failed`, `cancelled`), passages processed, units extracted, failure count, free-text model name and prompt version, times and error. |
+| `extraction_runs` | Scope (book, optionally document and chapter/section), status (`pending`, `processing`, `completed`, `needs_review`, `failed`, `cancelled`), passages processed, units extracted, failure count, free-text model name and prompt version, times and error. |
 
 **Relationship types** (`app/knowledge/relationships.py`): `supports` (evidence → concept/principle/method/framework), `illustrates` (example → ...), `implements` (method → framework/principle), `describes` (equation → ...), `part_of`, `depends_on`, `contradicts`, `related_to`. The allowed type combinations are checked with `check_relationship_types`; the database stores any combination of units in the same book.
 
 **Equations are never pretended to be complete.** An equation keeps its `original_expression` as extracted and an optional `latex`; at least one is required. `extraction_status` (`complete`, `partial`, `ambiguous`, `failed`) has no default, and `reconstruction_status` records whether a clean form was rebuilt. An incomplete equation is marked uncertain automatically and cannot be validated as `valid`.
 
 **Relation to Phase 1.** Knowledge survives regeneration of Phase 1 data. Deleting a document or book deletes its knowledge. Regenerating structure clears a unit's chapter/section references, and regenerating passages removes its passage links, but the unit stays and keeps its page range; `KnowledgeUnitRead.sources` is then empty (a unit whose sources were lost can be found by the missing links). New units must cite at least one passage. Apply the tables with `alembic upgrade head`; downgrading removes them (and any extracted knowledge) without touching Phase 1 data.
+
+## Knowledge extraction (Phase 2, Day 2)
+
+`app/extraction` sends one passage to an LLM and returns validated knowledge. It is independent of the database and of any single provider: it never reads or writes Phase 1 tables; the pipeline in the next section connects it to the stored passages and the screen.
+
+```python
+from app.config import get_settings
+from app.extraction.service import ExtractionService
+from app.extraction.settings import ExtractionSettings, load_model_registry
+from app.extraction.results import ExtractionRequest, PassageInput
+
+settings = get_settings()
+service = ExtractionService(load_model_registry(settings), ExtractionSettings.from_settings(settings))
+result = service.extract(ExtractionRequest(
+    knowledge_type="concept",
+    passage=PassageInput(id=passage.id, text=passage.text, page_start=passage.page_start, page_end=passage.page_end),
+))
+result.status        # succeeded | needs_review | failed
+result.items         # validated content, sources, pages, confidence, uncertainty
+result.execution     # model, prompt version, parameters, attempts, tokens, cost, timing
+unit = result.items[0].to_unit_create(book_id, document_id)   # the Day 1 schema, ready to store
+```
+
+### Configuring the LLM provider
+
+1. **Define models** in `config/llm_models.json` (path: `EXTRACTION_MODELS_FILE`). One entry per model: `id`, `provider` (`ollama`, `openai`, `anthropic`, `stormy` or `openai_compatible`), `model`, `deployment` (`local` or `hosted`), `base_url` (local and compatible servers), `context_window`, `temperature`, `max_output_tokens`, `structured_output` (`json_schema`, `json_mode` or `none`), `supports_temperature`, `extra_params`, `unsupported_params`, `timeout_seconds`, optional prices for cost estimates, and `active`. The file ships with a local Ollama model, an OpenAI model and an inactive Anthropic model as examples.
+2. **Select the model** with `EXTRACTION_MODEL_ID=<id>`. Use `EXTRACTION_MODEL_OVERRIDES={"equation":"<other id>"}` to give a category its own model. Nothing is sent anywhere until a model is selected.
+3. **Provide the API key through the environment only.** A hosted entry names the variable (`"api_key_env": "OPENAI_API_KEY"`); put the value in your shell or in `.env` (which is git-ignored). Keys are never written to configuration files, the database, logs or results, and a configuration whose `api_key_env` is not a variable name (for example a pasted key) is rejected.
+4. Optional: `EXTRACTION_MAX_RETRIES` (default 2), `EXTRACTION_RETRY_BACKOFF_SECONDS`, `EXTRACTION_MAX_BACKOFF_SECONDS`, `EXTRACTION_RAW_RESPONSE_MAX_CHARS`, `EXTRACTION_PROMPT_VERSIONS={"concept":"1.0.0"}`.
+
+**Switching and testing models.** The shipped file lists the Stormy models (Claude Sonnet/Haiku/Opus 5.5, Llama 3.3 70B, GPT-6 Luna, Pixtral Large, Palmyra X5; the image model is inactive). Put the PAT in `.env` as `STORMY_API_TOKEN=...` (git-ignored), then:
+
+```bash
+python -m app.extraction.check                              # list models and whether each is ready
+python -m app.extraction.check --model stormy-claude-haiku-5.5            # test one connection
+python -m app.extraction.check --model stormy-claude-haiku-5.5 --extract  # plus a sample extraction
+python -m app.extraction.check --all                        # test every ready model
+```
+
+To switch the model used by extraction, change `EXTRACTION_MODEL_ID` (for example `stormy-claude-sonnet-5.5`), or in code use `registry.select("<id>")`, which returns a registry using another model. The context windows in the file are assumptions; adjust them to the real limits.
+
+`service.check_ready(category)` validates the selected model (exists, active, credentials present) before a run; `extract` reports an invalid configuration as a failed result rather than raising.
+
+**Model capabilities are configuration, not assumption.** `json_schema` and `json_mode` use the provider's structured output; `none` relies on the prompt. Either way the response is parsed and validated here. `anthropic` and `stormy` have no JSON mode here, so they must use `none`. The `stormy` provider posts to `https://stormy-api.dolby.net/api/v1/messages/` with the PAT from the variable named in `api_key_env` (use `STORMY_API_TOKEN`); that API takes no system prompt or generation parameters, so the system prompt is prepended to the input and `temperature`/`max_output_tokens` are not sent. Models that reject a temperature set `supports_temperature: false`; parameters a model does not accept are listed in `unsupported_params` and not sent. If the prompt does not fit `context_window` minus `max_output_tokens`, context passages are dropped (furthest first) and recorded; if the target passage alone does not fit, the extraction fails with `context_window_exceeded`. A new provider is one class in `app/extraction/providers.py` plus an entry in `PROVIDER_FACTORIES`.
+
+### Running extraction on a book (Day 3 pipeline)
+
+Apply the migrations first (`alembic upgrade head`). The pipeline is `KnowledgeExtractionService` in `app/services/knowledge_extraction_service.py`; the screen, the command line and your own code all use it.
+
+**What a run does.** It validates the model, retrieves the passages of the scope in reading order, prepares each passage's context for the model, extracts every requested category with the versioned prompts, validates the answers, converts them to knowledge units, skips duplicates, stores everything, and records the model, prompt and attempts of every call plus the run's progress. One passage can yield several units and several categories.
+
+| Step | Where |
+|---|---|
+| Passage retrieval (book, document, chapter, section; reading order; neighbours; outline) | `app/repositories/passage_repository.py` |
+| Context preparation (book, chapter, section titles, pages, neighbours, fit to the model's window) | `app/services/context_preparation.py`, `app/extraction/context.py` |
+| Orchestration, status and results | `app/services/knowledge_extraction_service.py` |
+| Persistence, duplicate detection, run queries | `app/repositories/extraction_repository.py`, `app/knowledge/fingerprint.py` |
+| Background execution for the screen | `app/services/extraction_job_runner.py` |
+
+**Using it from code.**
+
+```python
+service = create_extraction_service(session)               # models file, default model and .env credentials
+service.available_models()                                  # id, provider, deployment, active, ready, reason
+service.extract_book(book_id, ["concept", "method"])        # also extract_chapter(node_id, ...), extract_section(node_id, ...)
+run_id = service.create_run(scope, categories, model_id="stormy-claude-haiku-5.5")   # validate and record, then
+status = service.execute_run(run_id, progress=callback)     # run it (the screen does this on a worker thread)
+service.get_run_status(run_id)                              # RunStatus: status, progress, counts, model, error
+service.list_runs(book_id); service.cancel_run(run_id)
+service.get_book_knowledge(book_id, knowledge_type="concept", run_id=run_id)
+```
+
+**Models.** A run uses one model configuration: the `model_id` you pass, otherwise the application default (`EXTRACTION_MODEL_ID`); with neither there is a clear configuration error. The configuration must exist, be active and have its credentials before anything is recorded. Local and hosted models go through the same layer. Per-category overrides (`EXTRACTION_MODEL_OVERRIDES`) apply only when no model is chosen for the run; no automatic routing exists.
+
+**Context.** Each passage is sent whole with its book, chapter and section, pages and (by default) one neighbouring passage on each side (`EXTRACTION_CONTEXT_PASSAGES`). If the prompt would not fit the model's context window (minus the reserved answer and `EXTRACTION_CONTEXT_SAFETY_MARGIN`), neighbouring passages are dropped first, furthest first; the reduction is stored on the execution (`context`) and flags it for review. A passage that cannot fit on its own is never truncated: that extraction fails with `context_window_exceeded` and the run continues.
+
+**Statuses.** A run is `pending`, `processing`, then `completed` (nothing to look at), `needs_review` (some extractions are uncertain, flagged or failed), `failed` (everything failed, or the run stopped after `EXTRACTION_MAX_CONSECUTIVE_FAILURES` failures in a row, default 5, 0 = never) or `cancelled`. A failed passage never ends the run by itself. Per passage and category, the `extraction_executions` table holds `succeeded`, `needs_review` or `failed`. The run stores the total, processed, failed (executions), skipped and duplicate counts, attempts, retries, validation failures, tokens, estimated cost, the model configuration snapshot and the error. A failed, cancelled or interrupted run can be resumed (`execute_run` again) and repeats only what is missing. One extraction per book runs at a time.
+
+**Idempotency and duplicates.** Passage and category pairs that already have a usable result are skipped unless `force` is set. Whatever is extracted, a unit is not stored again when the same primary source passage and category already have it: identical normalised content (`content_fingerprint`), near-identical wording (85% of words) or the same title with similar wording (50%). Another passage is never treated as a duplicate: the same concept in two passages is two units, with `same_title_as` in the later unit's metadata so a later step can relate them. Duplicates skipped are counted and noted on the execution.
+
+**The screen.** The *Extraction* screen lets you pick a book and document, a model (only usable ones; unavailable ones are listed with the reason), a scope (whole document, a chapter or a section), the categories and options, shows the plan (passages, model calls, already extracted), starts the run on a background worker and shows the model in use, progress, counts, errors, cancel and resume, earlier runs and the first extracted units.
+
+**Reviewing the results (Knowledge screen).** The *Knowledge* screen (`app/ui/knowledge.py`, backed by `app/services/knowledge_service.py`) is where you inspect what the model extracted. For a document it shows counts (units, need attention, approved, rejected, unreviewed), filters by category, validation, review status, extraction run, free-text search and "only uncertain or unvalidated", and a paged list in reading order. Opening a unit shows its full typed content (a concept's definition and examples, a principle's statement and conditions, an equation's expression and LaTeX, ...), the model's own doubts, its place (chapter, section, pages), each source passage with the quoted words (checked against the passage text) and the passage itself, the same title found elsewhere, and *How it was extracted*: model, prompt version, attempts, tokens, why it was flagged and the validation warnings. Approve, Reject, Needs changes or Reset set `review_status` and store an optional note in the unit's metadata. From code: `KnowledgeService(session).list_units(KnowledgeFilter(...))`, `.detail(unit_id)`, `.review(unit_id, "approved", note)`.
+
+**Command line.**
+
+```bash
+python -m tools.extract_knowledge                                  # books, passage and unit counts, models
+python -m tools.extract_knowledge --book "Latent" --outline        # chapters and sections with ids and passage counts
+python -m tools.extract_knowledge --book "Latent" --model stormy-claude-haiku-5.5 --types concept,principle --limit 3
+python -m tools.extract_knowledge --chapter <node id> --types all --yes
+python -m tools.extract_knowledge --section <node id> --types equation --dry-run    # call the model, store nothing
+python -m tools.extract_knowledge --book "Latent" --runs           # recent runs; --status <run id> for one
+```
+
+Other options: `--document`, `--offset`/`--limit` (passages), `--context N`, `--force`, `--yes`. It prints the plan and asks before more than 10 calls.
+
+**What is stored.** `extraction_runs` (one per run), `extraction_executions` (one per passage and category: model configuration snapshot, provider, model id and version, prompt name and version, generation parameters, timing, attempts, retries, validation failures, tokens, estimated cost, context handling, quality indicators, issues, review reasons, last raw response), `extraction_attempts` (one per model call, with its own model, prompt, parameters, outcome, raw response and issues) and `knowledge_units` (typed content, source passage links with quotes, chapter, section and pages, confidence, validation status, `extraction_run_id`, `extraction_execution_id`). Units arrive `unreviewed`. Deleting a run deletes its executions and attempts but keeps the knowledge; regenerating passages keeps executions and units. Phase 1 data is only read.
+
+### Prompts and versions
+
+Texts are in `app/extraction/prompt_texts.py` (one template per category; `1.0.0` is the first release, `1.1.0` adds the rule to extract only from the target passage and use neighbouring passages only for understanding; `1.2.0`, the current one, also tells the model which book it is reading; pin an older one with `EXTRACTION_PROMPT_VERSIONS`); lookup and rendering are in `app/extraction/prompts.py`. Every result records `<category>_extraction@<version>`. To change a prompt, add a new version rather than editing a released one.
+
+### Validation, retries and review
+
+| Stage | Question | Consequence |
+|---|---|---|
+| Structural (`parsing.py`) | Valid JSON matching the Day 1 schema? | error: correction attempt |
+| Source (`validation.py`) | Do cited passage ids and pages exist? Pages are never invented; if the model gives none they are taken from the cited passages. | error: correction attempt |
+| Semantic | Are quotes and equation expressions present in the cited passage? Pluggable via `SemanticValidator`. | warning: flagged for review |
+| Quality | Completeness, citation accuracy, duplicates, unsupported content. No overall reliability score. | indicators only |
+
+Invalid responses get a correction prompt listing the problems; failed provider calls (timeout, rate limit, 5xx) are resent after a back-off that honours `Retry-After`. One budget (`max_retries`) bounds both, and authentication or rejected-request errors are never retried. An exhausted budget returns a `failed` result flagged `needs_review`, with the last raw response and every attempt kept. A structurally valid result can still be `needs_review` (uncertain, inferred, incomplete equation, unsupported quote, dropped context). Incomplete equations are kept, never rejected.
+
+### Execution metadata
+
+`result.execution` records the model configuration id and a snapshot of it (no secrets), provider, the model identifier the provider reported, model version, prompt name and version, generation parameters, start/end times, duration, attempts, retries, validation failures, token usage and estimated cost, plus one `AttemptRecord` per call. `execution.run_fields()` returns arguments for `ExtractionRunCreate`. Because the snapshot is stored with the result, later configuration changes never alter finished records.
+
+### Provenance, relationships, equations and review flags (Phase 2, Day 4)
+
+Apply the migrations (`alembic upgrade head`, revision `1eb6b9dd22a0`). Existing units are backfilled: each gets a source snapshot and each earlier attempt its run and passage.
+
+**Source provenance** (`app/services/provenance_service.py`). Every unit keeps its source passages with a reference type, chapter/section node, pages, the quoted words and their character range in the passage, and a verification status. `source_status` on the unit is `verified`, `invalid` or `unverified`. Verification checks that the passage exists and belongs to the book, that quotes appear in the passage text, that pages lie inside the passage's pages and that the quote range fits. Problems raise `review_flags`, never silent deletions. A `source_snapshot` (passage text excerpt, pages, node titles) is stored when the unit is saved, so the evidence stays readable if Phase 1 passages are regenerated. Re-verify from the *Knowledge* screen (**Verify sources**), `python -m tools.extract_knowledge --book "..." --verify-sources`, or `ProvenanceService(session).verify_unit(id)` / `.verify_book(id)`. Phase 1 data is only read.
+
+**Relationships** (`app/services/relationship_service.py`, `app/services/relationship_extraction.py`). Types: `depends_on`, `supports`, `explains`, `derived_from`, `example_of`, `applies_to`, `part_of`, `related_to`, `contradicts` and the others in `app/knowledge/types.py`. Each relationship records its `origin` (`extracted` from the book, `ai_suggested`, `manual`, `system`), a `review_status`, an explanation, the source passages and an `evidence_quote`. An `extracted` relationship needs a passage and a quote; an `ai_suggested` one is flagged for review. Self links, unknown units and units of other books are rejected; duplicates (both directions for symmetric types) are not stored twice. Tick **Also find relationships** on the *Extraction* screen or pass `--relationships`: after a passage's units are stored, one extra model call (`relationship_extraction@1.0.0`) links them to each other and to up to `EXTRACTION_RELATIONSHIP_CONTEXT_UNITS` earlier units of the book. The plan shows these calls separately. A failed relationship step marks the passage `needs_review` rather than failing it.
+
+**Equations** (`app/services/equation_service.py`). What the source says is kept apart from what the model wrote. An `equation_sources` row copies the Phase 1 original text, source LaTeX, page, crop reference and surrounding text, never model output. Its `capture_status` is `complete`, `text_only`, `incomplete`, `ambiguous`, `image_only` or `needs_review`; math validation is `not_validated` (no reconstruction or code generation exists yet). An equation Phase 1 found but the model skipped becomes a `source_derived` unit so it is not lost; image-only equations are kept with the reason. `equation_reconstructions` is placeholder structure for a later phase; nothing writes to it.
+
+**Attempts, validation and review flags.** Every model call is an `extraction_attempts` row with its run, passage, status, a snapshot of the model configuration and a `validation_outcome`: `schema_valid`, `schema_invalid`, `source_invalid`, `unsupported_content`, `semantic_concerns`, `duplicate` or `needs_review`, the most serious applying. A `schema_valid` answer can still be wrong, so this is a lead for review, not a score. `review_flags` (`app/services/review_flag_service.py`) record what needs a person: uncertain or inferred extractions, low confidence (below `EXTRACTION_LOW_CONFIDENCE_THRESHOLD`), unsupported quotes, source problems, possible duplicates, reduced context, unresolved errors and repeated validation failures. A flag has a severity, belongs to one unit, attempt or relationship, is raised once per cause, and is resolved by you (**Resolve** on the *Knowledge* screen) or automatically when re-verification shows the cause is gone. This is not a review workflow: no assignment or approval chains.
+
+**Resumable processing.** Each run keeps one record per passage (`extraction_passage_records`): `pending`, `processing`, `completed`, `needs_review`, `failed` or `skipped`, with attempts, units, duplicates and the error. The run's status is derived from these. After a failure, cancel, restart or crash, **Resume** on the *Extraction* screen (or `--resume <run id>`) continues with the failed, not reached and interrupted passages only; completed ones are not repeated. A run that still looks active is not taken over unless it is older than the active-run timeout or you confirm. `service.resume_run(run_id, takeover=False, redo_completed=False)`; `redo_completed=True` also repeats the finished passages. The per-passage list is on the *Extraction* screen (**Passages**) and `--passages <run id>`; `--status <run id>` also says whether the run can be resumed.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `EXTRACTION_LOW_CONFIDENCE_THRESHOLD` | `0.5` | confidence below this raises a `low_confidence` flag |
+| `EXTRACTION_RELATIONSHIP_CONTEXT_UNITS` | `10` | earlier units offered as relationship candidates (0-50) |
+
+```bash
+python -m tools.extract_knowledge --book "Latent" --types concept,principle --relationships --limit 3
+python -m tools.extract_knowledge --passages <run id>          # status of every passage
+python -m tools.extract_knowledge --resume <run id>            # continue a failed or interrupted run
+python -m tools.extract_knowledge --book "Latent" --verify-sources
+```
 
 ## Architecture
 

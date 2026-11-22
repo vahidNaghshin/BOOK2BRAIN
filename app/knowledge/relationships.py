@@ -48,6 +48,19 @@ RELATIONSHIP_RULES: dict[RelationshipType, RelationshipRule] = {
         "The source conflicts with the target.", _CORE | {_K.EVIDENCE}, _CORE | {_K.EVIDENCE}
     ),
     RelationshipType.RELATED_TO: RelationshipRule("A general association.", _ALL, _ALL),
+    RelationshipType.DERIVED_FROM: RelationshipRule(
+        "The source was derived from the target (a result from a principle, an equation from another).",
+        _CORE | {_K.EQUATION},
+        _CORE | {_K.EQUATION, _K.EVIDENCE},
+    ),
+    RelationshipType.EXAMPLE_OF: RelationshipRule(
+        "The source is an example of the target.", frozenset({_K.EXAMPLE}), _CORE | {_K.EQUATION}
+    ),
+    RelationshipType.APPLIES_TO: RelationshipRule(
+        "The source (a principle, method, framework or equation) is applied to the target.",
+        frozenset({_K.PRINCIPLE, _K.METHOD, _K.FRAMEWORK, _K.EQUATION}),
+        frozenset({_K.CONCEPT, _K.METHOD, _K.FRAMEWORK, _K.EXAMPLE}),
+    ),
 }
 
 

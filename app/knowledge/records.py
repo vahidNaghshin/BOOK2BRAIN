@@ -52,6 +52,7 @@ def unit_to_record(unit: KnowledgeUnitCreate) -> KnowledgeUnit:
         page_start=unit.page_start,
         page_end=unit.page_end,
         page_status=unit.page_status.value,
+        origin=unit.origin.value,
         confidence=unit.confidence,
         is_uncertain=unit.uncertainty.is_uncertain,
         uncertainty_notes=unit.uncertainty.notes,
@@ -87,6 +88,8 @@ def unit_from_record(record: KnowledgeUnit) -> KnowledgeUnitRead:
         review_status=record.review_status,
         metadata=record.unit_metadata or {},
         schema_version=record.schema_version,
+        origin=record.origin,
+        source_status=record.source_status,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -102,6 +105,10 @@ def relationship_to_record(relationship: KnowledgeRelationshipCreate) -> Knowled
         explanation=relationship.explanation,
         confidence=relationship.confidence,
         extraction_run_id=relationship.extraction_run_id,
+        extraction_execution_id=relationship.extraction_execution_id,
+        origin=relationship.origin.value,
+        review_status=relationship.review_status.value,
+        evidence_quote=relationship.evidence_quote,
         sources=[
             KnowledgeRelationshipPassage(passage_id=passage_id, position=position)
             for position, passage_id in enumerate(relationship.source_passage_ids)
@@ -119,6 +126,10 @@ def relationship_from_record(record: KnowledgeRelationship) -> KnowledgeRelation
         explanation=record.explanation,
         confidence=record.confidence,
         extraction_run_id=record.extraction_run_id,
+        extraction_execution_id=record.extraction_execution_id,
+        origin=record.origin,
+        review_status=record.review_status,
+        evidence_quote=record.evidence_quote,
         source_passage_ids=[link.passage_id for link in record.sources],
         created_at=record.created_at,
     )
@@ -133,6 +144,10 @@ def run_to_record(run: ExtractionRunCreate) -> ExtractionRun:
         model_name=run.model_name,
         prompt_version=run.prompt_version,
         parameters=dict(run.parameters),
+        scope_type=run.scope_type,
+        model_configuration_id=run.model_configuration_id,
+        provider=run.provider,
+        model_snapshot=dict(run.model_snapshot) if run.model_snapshot is not None else None,
     )
 
 
@@ -154,6 +169,21 @@ def run_from_record(record: ExtractionRun) -> ExtractionRunRead:
         error_code=record.error_code,
         error_message=record.error_message,
         error_details=record.error_details,
+        scope_type=record.scope_type,
+        model_configuration_id=record.model_configuration_id,
+        provider=record.provider,
+        model_snapshot=record.model_snapshot,
+        total_passages=record.total_passages,
+        needs_review_count=record.needs_review_count,
+        skipped_count=record.skipped_count,
+        duplicate_count=record.duplicate_count,
+        attempt_count=record.attempt_count,
+        retry_count=record.retry_count,
+        validation_failure_count=record.validation_failure_count,
+        input_tokens=record.input_tokens,
+        output_tokens=record.output_tokens,
+        estimated_cost_usd=record.estimated_cost_usd,
+        relationships_extracted=record.relationships_extracted,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )

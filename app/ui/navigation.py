@@ -9,7 +9,7 @@ import uuid
 
 import streamlit as st
 
-SCREENS = ["Library", "Upload", "Structure", "Passages", "Processing", "Equations"]
+SCREENS = ["Library", "Upload", "Structure", "Passages", "Processing", "Equations", "Extraction", "Knowledge"]
 SCREEN_KEY = "screen"
 DOCUMENT_KEY = "selected_document_id"
 NODE_KEY = "selected_node_id"

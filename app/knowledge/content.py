@@ -262,7 +262,8 @@ class EquationContent(KnowledgeContent):
     """An equation, kept honestly: what was read is stored as read, and its state is explicit.
 
     `original_expression` is the text as extracted (possibly garbled); `latex` is a clean form
-    when one is available. At least one of them is required. `extraction_status` has no default
+    when one is available. At least one of them is required, except for an equation of which nothing
+    could be read as text (only an image exists): that must say so with status `failed` and a status note. `extraction_status` has no default
     on purpose: whoever builds the content must say whether the expression is complete.
     """
 
@@ -280,7 +281,7 @@ class EquationContent(KnowledgeContent):
 
     @model_validator(mode="after")
     def _status_is_honest(self) -> EquationContent:
-        if self.original_expression is None and self.latex is None:
+        if self.original_expression is None and self.latex is None and not self._image_only:
             raise ValueError("An equation needs its original expression or a LaTeX form (or both)")
         incomplete = self.extraction_status != ExpressionStatus.COMPLETE
         if incomplete and self.reconstruction_status == ReconstructionStatus.NOT_NEEDED:
@@ -293,6 +294,11 @@ class EquationContent(KnowledgeContent):
         if repeated := _duplicates(symbols):
             raise ValueError(f"Symbols must be defined once; repeated: {', '.join(repeated)}")
         return self
+
+    @property
+    def _image_only(self) -> bool:
+        """No text was captured at all: allowed only when that is said openly (status failed, with a note)."""
+        return self.extraction_status == ExpressionStatus.FAILED and bool(self.status_notes)
 
     @property
     def is_incomplete(self) -> bool:
@@ -308,7 +314,7 @@ class EquationContent(KnowledgeContent):
 
     @property
     def body(self) -> str:
-        return self.latex or self.original_expression or ""
+        return self.latex or self.original_expression or self.status_notes or self.name
 
     @property
     def summary(self) -> str | None:

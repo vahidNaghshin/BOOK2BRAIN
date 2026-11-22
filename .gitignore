@@ -9,4 +9,8 @@ __pycache__/
 storage/original/*
 storage/extracted/*
 storage/temporary/*
+storage/equations/*
 !storage/*/.gitkeep
+
+# Local copy of the Stormy API sample app (kept outside the repo; never commit it)
+stormy-api-sample-app/

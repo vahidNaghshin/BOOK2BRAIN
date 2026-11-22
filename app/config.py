@@ -88,6 +88,23 @@ class Settings(BaseSettings):
     # A table larger than this many times the maximum passage size is split between rows.
     passage_table_split_factor: float = Field(default=2.0, ge=1)
 
+    # Knowledge extraction (LLM). Model definitions live in a JSON file; API keys live only in the
+    # environment variables those definitions name (never in the file or the database).
+    extraction_models_file: Path = PROJECT_ROOT / "config" / "llm_models.json"
+    extraction_model_id: str | None = None
+    # Different model per knowledge category, e.g. {"equation": "local-ollama"}.
+    extraction_model_overrides: dict[str, str] = Field(default_factory=dict)
+    extraction_prompt_versions: dict[str, str] = Field(default_factory=dict)
+    extraction_max_retries: int = Field(default=2, ge=0, le=10)
+    extraction_retry_backoff_seconds: float = Field(default=1.0, ge=0)
+    extraction_max_backoff_seconds: float = Field(default=30.0, ge=0)
+    extraction_raw_response_max_chars: int = Field(default=20_000, ge=1_000)
+    extraction_context_passages: int = Field(default=1, ge=0, le=10)
+    extraction_context_safety_margin: float = Field(default=0.1, ge=0, le=0.5)
+    extraction_max_consecutive_failures: int = Field(default=5, ge=0)
+    extraction_low_confidence_threshold: float = Field(default=0.5, ge=0, le=1)
+    extraction_relationship_context_units: int = Field(default=10, ge=0, le=50)
+
     @model_validator(mode="after")
     def _check_structure_settings(self) -> "Settings":
         if not self.passage_min_tokens <= self.passage_target_tokens <= self.passage_max_tokens:
