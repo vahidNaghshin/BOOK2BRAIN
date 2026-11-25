@@ -2,7 +2,9 @@
 
 Turn books into structured, traceable text for AI work. A book is uploaded as a PDF, EPUB or DOCX file, processed into clean text, a chapter/section hierarchy, paragraphs and AI-ready **passages**, and everything is stored in PostgreSQL with its original document, page and position, so every passage can be traced back to the source (with pgvector installed for later phases).
 
-**Release v0.1.0 — Phase 1 foundation.** Upload a book, process it in one step, browse its chapters and sections, read its passages with their page references, and recover from failures without uploading again. Knowledge extraction, retrieval and AI features are later phases (see [Known limitations](#known-limitations)).
+**Release v0.1.0 — Phase 1 foundation.** Upload a book, process it in one step, browse its chapters and sections, read its passages with their page references, and recover from failures without uploading again.
+
+**Phase 2 — knowledge extraction (complete, with documented limits).** Passages are turned into typed, source-linked knowledge (concepts, principles, methods, frameworks, evidence, examples, equations) and relationships by a configurable LLM, with full provenance, retries, resumable runs and review flags, and can be inspected on the *Extraction* and *Knowledge* screens. Day 5 added the evaluation method and tools described in [Evaluating extraction](#evaluating-extraction-phase-2-day-5). Start with the [Phase 2 completion report](docs/phase2/completion-report.md). Retrieval, search and AI features are later phases (see [Known limitations](#known-limitations)).
 
 ## What it does
 
@@ -475,6 +477,48 @@ python -m tools.extract_knowledge --resume <run id>            # continue a fail
 python -m tools.extract_knowledge --book "Latent" --verify-sources
 ```
 
+## Evaluating extraction (Phase 2, Day 5)
+
+Schema-valid output is not necessarily correct, so Day 5 adds a repeatable way to measure extraction against **manually reviewed reference results** that are kept apart from any model output. Reports and findings are in [docs/phase2](docs/phase2/): [evaluation report](docs/phase2/evaluation-report.md), [model comparison](docs/phase2/model-comparison.md), [test and integrity results](docs/phase2/test-and-integrity-results.md), [performance](docs/phase2/performance.md) and the [completion report](docs/phase2/completion-report.md).
+
+**Datasets** (`evaluation/datasets/*.json`, validated by `app/evaluation/dataset.py`):
+
+| Dataset | Kind | What it is |
+|---|---|---|
+| `study_guide_v1` | inline | Twelve short passages written for the evaluation (every category, relationships, a complete, an incomplete and an image-only equation, a rejected claim, a passage with nothing to extract). They are loaded as a fresh book each run, so they can be run any number of times with any model. |
+| `latent_ebm_v1` | stored book | Reference results for six consecutive passages of the processed book in the development database. It evaluates extractions that already exist (it cannot be re-run without disturbing the stored knowledge). |
+
+Each reference unit lists acceptable names, the key facts it must carry (alternatives per fact), phrases it must not contain, and for equations the symbols, acceptable capture statuses and whether the source is damaged enough that the system must flag it. `review.status` says whether a person has signed the reference off (`draft` until then; both datasets are drafts prepared by the AI assistant and still need a human reviewer).
+
+```bash
+python -m tools.evaluate_extraction --list
+python -m tools.evaluate_extraction --dataset study_guide_v1 --validate            # check a dataset, run nothing
+python -m tools.evaluate_extraction --dataset latent_ebm_v1 --stored               # measure the extractions already stored (read only)
+python -m tools.evaluate_extraction --dataset study_guide_v1 --model stormy-claude-haiku-5.5 --types all --relationships
+python -m tools.evaluate_extraction --dataset study_guide_v1 --model MODEL_A --model MODEL_B    # compare models on identical passages
+python -m tools.evaluate_extraction --dataset study_guide_v1 --model MODEL_A --repeat 3         # repeatability
+```
+
+A live run sends the dataset's passages to the selected model (a hosted one needs `--yes`), executes the **normal pipeline** (`KnowledgeExtractionService`), measures the stored result and writes `evaluation/results/<dataset>-<time>.md` and `.json` with the model configuration, generation parameters, prompt versions, run ids and timing of every run. Each run uses a fresh evaluation book (`[Evaluation] ...`, removed afterwards unless `--keep`, so it can be inspected on the *Knowledge* screen), because the pipeline never stores the same unit twice for a passage.
+
+**What is measured and how it is counted** (every metric carries its numerator, denominator and definition in the report; a metric that cannot be measured is `n/a`, never zero):
+
+| Dimension | Metrics |
+|---|---|
+| Completeness | recall of required units (overall, per category, in passages with several units), precision against the reference, passages that should stay empty, possible merges |
+| Semantic accuracy | key-fact coverage (a lexical proxy, not proof of meaning), forbidden phrases, units flagged unsupported, relationship recall, type accuracy and precision |
+| Source accuracy | right primary passage, pages inside the passage, units whose sources verified, quotes found, units whose primary source is the passage that was extracted |
+| Structural validity | share of answers that matched their schema, extractions that succeeded on the first call, category accuracy |
+| Duplication | redundant units, duplicates the pipeline refused to store |
+| Equations | found, original expression kept, Phase 1 source kept, image and page kept, capture status as expected, flagged when the source is damaged |
+| Operations | model calls, retry rate, failure rate, needs-review rate, time per passage, tokens, estimated cost (only when the provider reports them / prices are configured) |
+
+Matching is lexical (names, key words, symbols), so the report lists every matched pair, every missed required unit and every unmatched extraction for a reviewer to read. Precision counts unmatched units only in passages whose reference is exhaustive.
+
+**The Knowledge screen** now opens with an *Overview*: units by category, equations by capture status, relationships by type, open review flags, the outcome of every model call, and the extractions that failed (page, category, reason, model and prompt). It opens by itself when something failed.
+
+**Other quality tools:** `python -m tools.benchmark_extraction` measures the pipeline's own time, queries and memory per passage with a scripted model on a separate `_benchmark` database; `python -m tools.check_migrations_on_copy` copies the development database, rolls the copy back one revision and upgrades it again, and verifies that Phase 1 data is unchanged and nothing was lost.
+
 ## Architecture
 
 ```
@@ -556,6 +600,7 @@ Database tests use a separate database named after yours with a `_test` suffix (
 - Equation tests render their PDFs with matplotlib (a test-only dependency in `requirements.txt`).
 - `tests/test_end_to_end.py` is the acceptance test: it uploads a generated multi-page PDF, processes it through the real Docling pipeline in the background, checks structure and passages, verifies every passage's page range against the original PDF text, drives the screens (library → structure → passages → next/previous) and re-reads everything through a new database engine, as after a restart. `test_pipeline.py` covers stages, failure at each stage, resume, idempotency and multiple editions; `test_integrity.py` breaks saved data on purpose; `test_pipeline_ocr.py` covers OCR (including real Tesseract); `test_ui_flows.py` covers the screens.
 - Structure and passage tests build synthetic books in code (`tests/structure_helpers.py`): numbered and unnumbered chapters, parts, front/back matter, multi-level numbering, equations, tables, captions, multi-page paragraphs and chapters, ambiguous headings. The LLM is always faked. Tests marked `sample_book` also run the real PDF pipeline on the first 70 pages of the sample book in `storage/original` (git-ignored, so they are skipped when it is absent or Docling's models are missing).
+- Phase 2 tests never call a model: `tests/extraction_db_helpers.py` supplies a scripted provider (`FunctionProvider`) that answers from a function, and every pipeline, recovery, provenance, equation, relationship and evaluation test runs on the test database with it. Day 5 added `test_evaluation_metrics.py` (the metrics as pure functions), `test_evaluation_runner.py` (the evaluation through the real pipeline with scripted models, repeatability, comparison, failures, the command line), `test_day5_integration.py` (a DOCX book processed by the real Phase 1 pipeline, then extracted, inspected, interrupted and resumed), `test_day5_integrity.py` (the delete rule of every Phase 2 foreign key), `test_day5_equation_provenance.py` and `test_day5_tools.py`. A test fixture refuses any use of the application database, so a test can never read or change your data by accident.
 - Tests marked `ocr` use a real Tesseract installation and are skipped if it is missing. Run only them with `pytest -m ocr`, or leave them out with `pytest -m "not ocr"`. All other OCR tests use a fake engine.
 
 ## Troubleshooting the database connection
@@ -627,6 +672,9 @@ app/
                    equation_detector.py, math_symbols.py, equation_models.py
   knowledge/       Phase 2 (no database access except records.py): types.py, content.py (typed content per
                    category), schemas.py (common envelope, relationships, runs), relationships.py, records.py
+  extraction/      Phase 2 LLM layer (no database): providers, model configuration, versioned prompts, parsing, validation
+  evaluation/      Phase 2 Day 5: dataset.py (reference results), metrics.py (pure), observation.py,
+                   runner.py (loads a dataset, runs the pipeline, observes the result), report.py
   repositories/    Database queries
 database/
   connection.py    Engine, sessions, connection check
@@ -635,10 +683,13 @@ database/
                    KnowledgeUnit, KnowledgeUnitPassage, KnowledgeRelationship, ExtractionRun)
   migrations/      Alembic migrations (configured by alembic.ini)
   init/            Scripts run when the Docker database is first created
+evaluation/        Reviewed reference datasets (datasets/) and generated reports (results/)
+docs/phase2/       Evaluation report, model comparison, test and integrity results, performance, completion report
 ingestion/         Reserved for later phases
 storage/           Default location of uploaded files (git-ignored)
 tests/             pytest suite
-tools/             Quality measurement: evaluate_equations.py, compare_math_engines.py
+tools/             Quality measurement: evaluate_equations.py, compare_math_engines.py, extract_knowledge.py,
+                   evaluate_extraction.py, benchmark_extraction.py, check_migrations_on_copy.py
 ```
 
 The layers are kept separate: the UI calls services, services call parsers, repositories and the storage backend, and only repositories talk to the database. Parsers return structured results (`ParsingResult`) and never touch the database or the UI. Storage sits behind the `StorageBackend` interface in `storage_service.py`, so cloud storage can be added later.
@@ -648,7 +699,7 @@ The layers are kept separate: the UI calls services, services call parsers, repo
 - A completed document cannot be re-processed from scratch yet (for example after changing OCR settings); only failed documents can be retried. Structure and passages can be rebuilt from its stored text.
 - Processing runs in one background thread of the app process (no task queue): one document at a time, and restarting the app interrupts a run (it can be retried and resumed).
 - No cover images or automatic publisher/year extraction: publisher, year and ISBN come from the upload form.
-- Phase 1 stops at passages; Phase 2 so far has only the knowledge data model (no extraction, UI or repositories yet). Knowledge graphs, concept extraction, chat/RAG retrieval, equation reconstruction, equation-to-Python generation and semantic search are not implemented.
+- Phase 2 extracts knowledge per passage. Knowledge graphs, chat/RAG retrieval, equation reconstruction, equation-to-Python generation, embeddings and semantic search are not implemented, and review is a simple status and flag, not a workflow. Known Phase 2 limitations (a unit can cite a neighbouring passage as its primary source, units are checked lexically rather than semantically, no live multi-model comparison has been run yet, the reference datasets await a human reviewer) are listed in [docs/phase2/completion-report.md](docs/phase2/completion-report.md#known-limitations-and-recommendations).
 - The sample book used by the `sample_book` tests is not part of the repository; those tests are skipped when `storage/original` has no suitable PDF (the end-to-end test uses a generated book instead).
 - Structure detection is heuristic. It works from the headings, sizes and positions Docling reports; books whose headings are not marked up (plain text, scans with poor layout analysis) produce more ambiguous nodes, and the optional LLM only classifies candidates the heuristics already found. A two-line title page that the parser merges into one block is split only when the author's name appears elsewhere in the opening pages. Headings the parser mislabels (formulas, pseudocode) can still appear as nodes, usually flagged ambiguous. Page headers repeated on three or more nearby pages are ignored as headings.
 - Structure and passages are rebuilt for the whole document at once; they cannot be edited by hand yet. Overlap is taken from prose paragraphs only. Passage token counts are approximate unless `tiktoken` is used.

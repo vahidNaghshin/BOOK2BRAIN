@@ -53,7 +53,7 @@ from app.knowledge.schemas import (
     KnowledgeUnitRead,
     content_from_details,
 )
-from app.knowledge.types import EquationCaptureStatus, FlagSeverity, KnowledgeType, ReviewFlagCode
+from app.knowledge.types import EquationCaptureStatus, FlagSeverity, KnowledgeType, ReviewFlagCode, SourceRole
 from app.repositories.extraction_repository import ExtractionRepository, StoreOutcome
 from app.repositories.passage_repository import ExtractionScope, PassageRepository
 from app.services.context_preparation import ContextPreparer, source_info
@@ -62,7 +62,7 @@ from app.services.errors import ExtractionRunError, ExtractionScopeError
 from app.services.provenance_service import ProvenanceService
 from app.services.relationship_extraction import RelationshipExtractionService
 from app.services.review_flag_service import ReviewFlagService
-from database.models import ExtractionExecution, ExtractionRun, KnowledgeUnit, Passage
+from database.models import Equation, ExtractionExecution, ExtractionRun, KnowledgeUnit, Passage
 
 logger = logging.getLogger(__name__)
 
@@ -656,9 +656,8 @@ class KnowledgeExtractionService:
 
     def _after_store(self, run: ExtractionRun, passage: Passage, category: KnowledgeType, result: ExtractionResult):
         def hook(outcome: StoreOutcome, execution: ExtractionExecution) -> None:
-            equations = self.equations.equations_in(passage) if category == KnowledgeType.EQUATION else []
             for index, record in outcome.records:
-                self._finalize_unit(run, passage, record, result.items[index], equations, execution)
+                self._finalize_unit(run, passage, record, result.items[index], None, execution)
             records = dict(outcome.records)
             for index, other_id in outcome.possible_duplicates:
                 self.flags.flag_unit(
@@ -676,7 +675,7 @@ class KnowledgeExtractionService:
         passage: Passage,
         record: KnowledgeUnit,
         item: ExtractedKnowledge | None,
-        equations,
+        equations: list[Equation] | None,
         execution: ExtractionExecution | None,
     ) -> None:
         """Capture and verify the unit's source, record its equation capture, and raise the flags that apply."""
@@ -685,7 +684,10 @@ class KnowledgeExtractionService:
         if record.knowledge_type == KnowledgeType.EQUATION.value:
             content = item.content if item else content_from_details(record.knowledge_type, record.details)
             if isinstance(content, EquationContent):
-                capture = self.equations.record_capture(record, passage, content, equations)
+                # The equation belongs to the passage the unit cites as its source, which is not always the
+                # passage being processed (a model can report an equation of a neighbouring passage).
+                source_passage = self.equations.source_passage(record) or passage
+                capture = self.equations.record_capture(record, source_passage, content, equations)
                 code = flag_code_for(EquationCaptureStatus(capture.capture_status))
                 if code:
                     self.flags.flag_unit(
@@ -700,6 +702,14 @@ class KnowledgeExtractionService:
         def flag(code: ReviewFlagCode, message: str, *, severity=FlagSeverity.WARNING, key: str = "", raised_by: str = "system") -> None:
             self.flags.flag_unit(book_id, record.id, code, message, severity=severity, dedupe_key=key, raised_by=raised_by, run_id=run.id, commit=False)
 
+        primary = next((s for s in record.sources if s.role == SourceRole.PRIMARY.value), None)
+        if primary is not None and primary.passage_id != passage.id:
+            flag(
+                ReviewFlagCode.SOURCE_OUTSIDE_TARGET,
+                "The unit cites a neighbouring passage as its primary source, not the passage it was extracted from; "
+                "it was read from context and will be found again when that passage is processed.",
+                key=str(primary.passage_id),
+            )
         if item.uncertainty.is_uncertain:
             flag(ReviewFlagCode.UNCERTAIN_EXTRACTION, item.uncertainty.notes or "The model reported uncertainty about this item.", raised_by="model")
         if item.basis != "explicit":

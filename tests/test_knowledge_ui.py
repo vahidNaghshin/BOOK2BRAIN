@@ -128,3 +128,56 @@ def test_the_pages_of_a_long_list_can_be_turned(session, library):
         assert at.number_input(key="knowledge_page").value == 1
     finally:
         knowledge.PAGE_SIZE = 15
+
+
+# -- the overview (Day 5): categories, equations, relationships, flags and failures at a glance ----------
+
+
+def extract_with_everything(session: Session, library) -> None:
+    """Concepts, a damaged equation, a relationship, an uncertain unit and one passage that cannot be extracted."""
+    from app.extraction.errors import ProviderTimeoutError
+    from tests.extraction_db_helpers import add_equation, relationship, relationships_reply
+
+    add_equation(session, library, "c1a", plain_text="dS = dQ / T", validation_status="invalid")
+    broken = library.passages["c1b"].id
+
+    def answer(call):
+        if call.is_relationship:
+            return relationships_reply(relationship(call, "Entropy", "Entropy"))  # no second unit: refused as a self link
+        if call.target_id == str(broken):
+            raise ProviderTimeoutError("timed out")
+        return reply(item(call))
+
+    service, _ = make_service(session, answer, max_retries=1)
+    service.extract_chapter(library.nodes["ch1"].id, ["concept", "equation"], limit=2)
+
+
+def test_the_overview_counts_what_a_reviewer_needs_without_opening_each_unit(session, library):
+    from app.repositories.knowledge_repository import KnowledgeFilter
+    from app.services.knowledge_service import KnowledgeService
+
+    extract_with_everything(session, library)
+
+    overview = KnowledgeService(session).overview(KnowledgeFilter(book_id=library.book.id, document_id=library.document.id))
+
+    assert overview.by_type["concept"] == 1 and overview.by_type["equation"] >= 1
+    assert overview.equation_status == {"needs_review": 1}, "Phase 1 marked the equation invalid"
+    assert overview.open_flags.get("equation_needs_review") == 1
+    assert overview.attempt_outcomes.get("provider_error", 0) >= 2, "the failed passage was tried and retried, and every call is counted"
+    failure = next(f for f in overview.failed_extractions if f.category == "concept")
+    assert failure.failure_code == "provider_timeout" and failure.page_start == library.passages["c1b"].page_start
+    assert failure.attempts == 2 and failure.prompt and failure.model
+
+
+def test_the_screen_shows_the_overview_with_failures_open(session, library):
+    extract_with_everything(session, library)
+
+    at = open_page()
+
+    [expander] = [e for e in at.expander if e.label.startswith("Overview")]
+    assert "2 failed extraction(s)" in expander.label and "open review flag(s)" in expander.label
+    assert expander.proto.expanded, "failures are shown without having to ask"
+    shown = [str(df.value.to_dict("records")) for df in at.dataframe]
+    assert any("provider_timeout" in text for text in shown) and any("Equation needs review" in text for text in shown)
+    assert any("Unresolved extraction error" in text for text in shown), "unresolved failures are visible as review flags too"
+    assert len(at.table[0].value) >= 2, "the unit list is unchanged by the overview"

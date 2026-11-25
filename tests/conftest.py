@@ -76,6 +76,19 @@ def migrate(url: str, revision: str = "head") -> None:
     command.upgrade(alembic_config(url), revision)
 
 
+@pytest.fixture(autouse=True)
+def never_use_the_application_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail loudly when code under test reaches for the application database instead of the test one."""
+
+    def refuse():
+        raise AssertionError(
+            "A test used the application database. Wire the code to the test database "
+            "(tests/ui_helpers.patch_ui for screens) instead of database.connection.get_engine()."
+        )
+
+    monkeypatch.setattr("database.connection.get_engine", refuse)
+
+
 @pytest.fixture(scope="session")
 def test_database_url() -> str:
     url = derive_test_url()

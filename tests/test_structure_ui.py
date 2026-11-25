@@ -13,6 +13,7 @@ from app.structure.tree import ancestor_ids, default_expanded, descendant_ids, v
 from app.ui.formatting import format_pages, node_type_label
 from database.models import StructuralNode
 from tests.structure_helpers import numbered_textbook, persist_document
+from tests.ui_helpers import patch_ui
 
 
 @dataclass
@@ -112,16 +113,7 @@ def structure_app() -> None:
 
 
 def wire_database(engine: Engine, settings, monkeypatch) -> None:
-    @contextmanager
-    def scope():
-        local = Session(bind=engine, autoflush=False, expire_on_commit=False)
-        try:
-            yield local
-        finally:
-            local.close()
-
-    monkeypatch.setattr("app.ui.structure.session_scope", scope)
-    monkeypatch.setattr("app.ui.structure.get_settings", lambda: settings)
+    patch_ui(monkeypatch, engine, settings, None)
 
 
 @pytest.fixture

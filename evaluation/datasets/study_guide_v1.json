@@ -1,0 +1,377 @@
+{
+  "name": "study_guide_v1",
+  "version": "1.0.0",
+  "description": "Twelve short passages from an invented study guide ('The Practice of Learning'), written for this evaluation so that the text can be shared and run through any model. They cover every knowledge category, dense and plain prose, several units in one passage, relationships, one complete, one incomplete and one image-only equation, a debunked claim, a passage that holds no knowledge, and a worked example. The facts in the text are the study guide's own; they illustrate the method and are not claims about the real literature.",
+  "source": { "kind": "inline", "book_title": "The Practice of Learning (evaluation text)", "author": "Evaluation dataset" },
+  "review": {
+    "prepared_by": "AI assistant (GitHub Copilot) for the project owner, working only from the passage text; the extraction output was never consulted",
+    "prepared_on": "2026-11-25",
+    "status": "draft",
+    "notes": "Reference results were written independently of any model output. They still need a human reviewer's sign-off before the status can become 'reviewed'. Names are the acceptable titles; each fact is a list of alternative words of which one must appear in the extracted unit."
+  },
+  "categories": ["concept", "principle", "method", "framework", "evidence", "example", "equation"],
+  "passages": [
+    {
+      "key": "s01-spacing",
+      "pages": [12, 12],
+      "chapter": "Memory and learning",
+      "section": "Spacing",
+      "characteristics": ["straightforward explanatory text", "concept with explanation", "contains an example"],
+      "text": "The spacing effect is the finding that information studied in several sessions spread over time is remembered longer than the same information studied in one block. A learner who reads a chapter three times on the same evening usually feels fluent, but recall a month later is poor. The same three readings spread over three weeks feel harder and produce slower progress, yet they produce much stronger long-term retention. Researchers explain the difference by the effort of retrieval: when a memory has partly faded, bringing it back to mind strengthens it more than re-reading something still fresh.",
+      "units": [
+        {
+          "key": "spacing",
+          "category": "concept",
+          "names": ["Spacing effect", "Distributed practice", "Spaced learning"],
+          "facts": [
+            ["several sessions", "spread over time", "spaced", "distributed"],
+            ["remembered longer", "long-term retention", "better retention", "stronger retention", "retained longer"],
+            ["one block", "single session", "massed", "same evening", "cramming"]
+          ],
+          "quote": "information studied in several sessions spread over time is remembered longer than the same information studied in one block"
+        },
+        {
+          "key": "retrieval-effort",
+          "category": "principle",
+          "accept_categories": ["concept"],
+          "required": false,
+          "names": ["Effortful retrieval strengthens memory", "Retrieval effort", "Retrieval strengthens partly faded memories"],
+          "facts": [["retriev", "bringing it back to mind"], ["strengthen"], ["partly faded", "faded", "still fresh", "re-reading"]],
+          "quote": "when a memory has partly faded, bringing it back to mind strengthens it more than re-reading something still fresh"
+        },
+        {
+          "key": "three-readings",
+          "category": "example",
+          "required": false,
+          "names": ["Reading a chapter three times", "Massed versus spaced reading"],
+          "facts": [["three times", "three readings"], ["three weeks", "same evening"]]
+        }
+      ]
+    },
+    {
+      "key": "s02-forgetting-curve",
+      "pages": [13, 13],
+      "chapter": "Memory and learning",
+      "section": "Forgetting",
+      "characteristics": ["dense technical content", "complete equation", "relationship between an equation and a concept"],
+      "text": "The forgetting curve describes how the chance of recalling a memory falls as time passes since it was last used. A common model treats retention as an exponential decay: R = e^(-t/S), where R is retention between 0 and 1, t is the time since the last review, and S is the stability of the memory. A larger S means the memory fades more slowly. Each successful review raises S, so the intervals between reviews can grow. The model is a simplification; real forgetting depends on the material and on the learner, and S has to be estimated from data.",
+      "units": [
+        {
+          "key": "forgetting-curve",
+          "category": "concept",
+          "names": ["Forgetting curve", "Exponential decay of retention"],
+          "facts": [["chance of recalling", "probability of recall", "recall probability", "retention"], ["falls", "decreases", "declines", "decay"], ["time"]],
+          "quote": "The forgetting curve describes how the chance of recalling a memory falls as time passes since it was last used"
+        },
+        {
+          "key": "stability",
+          "category": "concept",
+          "names": ["Stability of a memory", "Memory stability", "Stability (S)", "Stability"],
+          "facts": [["larger", "higher", "greater"], ["slowly", "slower"], ["successful review", "each review", "raises"]],
+          "quote": "A larger S means the memory fades more slowly"
+        },
+        {
+          "key": "interval-growth",
+          "category": "principle",
+          "accept_categories": ["concept"],
+          "required": false,
+          "names": ["Review intervals can grow", "Reviews raise stability", "Expanding review intervals"],
+          "facts": [["successful review", "each review"], ["raises", "increases", "grow"]]
+        },
+        {
+          "key": "retention-equation",
+          "category": "equation",
+          "names": ["Retention as exponential decay", "Forgetting curve equation"],
+          "equation": {
+            "tokens": ["r=e", "t/s"],
+            "capture_status": ["complete"],
+            "must_be_flagged": false,
+            "has_image": true,
+            "phase1": {
+              "latex": "R = e^{-t/S}",
+              "original_latex": "R = e ^ { - t / S }",
+              "plain_text": "R = e -t/S",
+              "surrounding_text": "retention as an exponential decay",
+              "validation_status": "valid",
+              "has_image": true
+            }
+          }
+        }
+      ],
+      "relationships": [
+        { "source": "retention-equation", "target": "forgetting-curve", "types": ["describes", "related_to"], "required": true },
+        { "source": "stability", "target": "forgetting-curve", "types": ["part_of", "related_to", "depends_on"], "required": false }
+      ]
+    },
+    {
+      "key": "s03-memory-stages",
+      "pages": [14, 15],
+      "chapter": "Memory and learning",
+      "section": "Stages of memory",
+      "characteristics": ["multiple concepts in one passage", "relationships between concepts"],
+      "text": "Memory is usually described in three stages. Encoding is the transformation of an experience into a form the brain can store; attention during encoding largely decides what is stored at all. Consolidation is the process, lasting hours to years, by which a fresh trace becomes stable; sleep plays an important part in it. Retrieval is the act of reconstructing a stored memory when it is needed. Retrieval is not a replay: each time a memory is retrieved it is rebuilt, and it can be altered or strengthened as it is stored again. Failures at any stage look the same to the learner, who simply cannot remember, but they need different remedies.",
+      "units": [
+        {
+          "key": "encoding",
+          "category": "concept",
+          "names": ["Encoding"],
+          "facts": [["transformation", "turning", "converting", "converts"], ["store", "stored"], ["attention"]],
+          "quote": "Encoding is the transformation of an experience into a form the brain can store"
+        },
+        {
+          "key": "consolidation",
+          "category": "concept",
+          "names": ["Consolidation"],
+          "facts": [["stable", "stabil"], ["hours to years", "hours", "years"], ["sleep"]],
+          "quote": "Consolidation is the process, lasting hours to years, by which a fresh trace becomes stable"
+        },
+        {
+          "key": "retrieval",
+          "category": "concept",
+          "names": ["Retrieval"],
+          "facts": [["reconstruct", "rebuilt", "rebuild"], ["not a replay", "not replay", "replay"], ["altered", "strengthened"]],
+          "quote": "Retrieval is the act of reconstructing a stored memory when it is needed"
+        },
+        {
+          "key": "stages",
+          "category": "framework",
+          "accept_categories": ["concept"],
+          "required": false,
+          "names": ["Three stages of memory", "Stages of memory", "Memory stages"],
+          "facts": [["encoding"], ["consolidation"], ["retrieval"]]
+        },
+        {
+          "key": "remedies",
+          "category": "principle",
+          "accept_categories": ["concept"],
+          "required": false,
+          "names": ["Different remedies for failures at different stages", "Memory failures need different remedies"],
+          "facts": [["remed"], ["stage", "stages"], ["look the same", "same to the learner", "cannot remember"]]
+        }
+      ],
+      "relationships": [
+        { "source": "consolidation", "target": "encoding", "types": ["depends_on", "related_to"], "required": false },
+        { "source": "retrieval", "target": "consolidation", "types": ["depends_on", "related_to"], "required": false },
+        { "source": "encoding", "target": "stages", "types": ["part_of", "related_to"], "required": false }
+      ]
+    },
+    {
+      "key": "s04-testing-effect",
+      "pages": [16, 16],
+      "chapter": "Memory and learning",
+      "section": "Testing",
+      "characteristics": ["principle with conditions and limits", "dense technical content"],
+      "text": "The testing effect is the principle that taking a test on material improves later retention more than spending the same time studying it again. The benefit holds when the test requires the learner to produce the answer, such as a short written response, and it is smaller for recognition formats such as multiple choice. It depends on feedback: when learners do not find out the correct answer after a failed attempt, errors can persist. The effect should not be read as a reason to avoid studying. Testing works best after an initial study phase, because a learner cannot retrieve what was never learned.",
+      "units": [
+        {
+          "key": "testing-effect",
+          "category": "principle",
+          "accept_categories": ["concept"],
+          "names": ["Testing effect", "Test-enhanced learning"],
+          "facts": [
+            ["more than", "greater", "better than", "outperform", "improves later retention"],
+            ["studying it again", "restudy", "re-study", "re-reading", "same time"],
+            ["feedback"],
+            ["produce", "short written", "recall"],
+            ["recognition", "multiple choice"],
+            ["initial study", "after studying", "after an initial"]
+          ],
+          "forbidden": ["replaces study", "replace studying", "no need to study", "instead of studying"],
+          "quote": "taking a test on material improves later retention more than spending the same time studying it again"
+        }
+      ]
+    },
+    {
+      "key": "s05-retrieval-practice",
+      "pages": [17, 18],
+      "chapter": "A study routine",
+      "section": "Retrieval practice",
+      "characteristics": ["method with ordered steps", "preconditions and limitations"],
+      "text": "Retrieval practice can be organised as a short cycle. Before starting, gather the material and a way to check answers, such as a textbook or answer key. First, study the material once and close it. Second, write down everything you can remember, without looking. Third, compare your answer with the material and mark what was missing or wrong. Fourth, restudy only the missing parts. Finally, schedule the next cycle after a gap that grows with each success, for example one day, then three days, then a week. The method needs an answer key; without it, mistakes cannot be found. It takes more time per session than re-reading, which many learners find discouraging.",
+      "units": [
+        {
+          "key": "retrieval-cycle",
+          "category": "method",
+          "names": ["Retrieval practice cycle", "Retrieval practice", "Retrieval practice method"],
+          "facts": [
+            ["write down", "free recall", "from memory", "recall everything"],
+            ["compare"],
+            ["restudy", "re-study", "only the missing"],
+            ["schedule", "gap", "interval"],
+            ["answer key", "check answers"],
+            ["one day", "three days", "a week"],
+            ["more time", "discouraging"]
+          ],
+          "quote": "write down everything you can remember, without looking"
+        },
+        {
+          "key": "retrieval-practice-concept",
+          "category": "concept",
+          "required": false,
+          "names": ["Retrieval practice"],
+          "facts": [["retriev"], ["cycle"]]
+        }
+      ]
+    },
+    {
+      "key": "s06-study-loop",
+      "pages": [19, 19],
+      "chapter": "A study routine",
+      "section": "The Study Loop",
+      "characteristics": ["framework with named components", "components that feed each other"],
+      "text": "The Study Loop is a framework that organises learning into three connected parts. The first part, Plan, sets the goal for the session and chooses the material. The second part, Practise, carries out retrieval and spaced review of that material. The third part, Reflect, compares results with the goal and adjusts the next plan. The parts feed each other: reflection changes the plan, and the plan decides what is practised. The Study Loop is meant for self-directed learners with several weeks available and is less suited to cramming for tomorrow's test.",
+      "units": [
+        {
+          "key": "study-loop",
+          "category": "framework",
+          "names": ["The Study Loop", "Study Loop"],
+          "facts": [
+            ["plan"],
+            ["practise", "practice"],
+            ["reflect"],
+            ["goal"],
+            ["feed", "adjust", "changes the plan"],
+            ["self-directed", "several weeks"],
+            ["cramming"]
+          ],
+          "quote": "The Study Loop is a framework that organises learning into three connected parts"
+        }
+      ]
+    },
+    {
+      "key": "s07-vocabulary-study",
+      "pages": [20, 20],
+      "chapter": "Evidence",
+      "section": "A classroom study",
+      "characteristics": ["evidence with numbers and stated limitations"],
+      "text": "In a classroom study of 120 secondary-school students, two groups learned the same 40 vocabulary words. One group studied the words in a single 60-minute session; the other studied for three 20-minute sessions on separate days. Four weeks later the spaced group recalled an average of 31 words and the single-session group an average of 24. The authors note that the study took place in one school, used one language, and did not test whether the difference lasts beyond four weeks. Both groups reported similar interest in the task.",
+      "units": [
+        {
+          "key": "vocabulary-study",
+          "category": "evidence",
+          "names": ["Spaced versus single-session vocabulary study", "Classroom study of spaced study", "Vocabulary study"],
+          "facts": [["120"], ["40"], ["31"], ["24"], ["four weeks", "4 weeks"], ["one school", "single school", "one language", "limitation"]],
+          "forbidden": ["proves that", "all students", "universally", "for every learner"],
+          "quote": "the spaced group recalled an average of 31 words and the single-session group an average of 24"
+        }
+      ]
+    },
+    {
+      "key": "s08-maya",
+      "pages": [21, 21],
+      "chapter": "Evidence",
+      "section": "A worked example",
+      "characteristics": ["example (narrative scenario)"],
+      "text": "Consider Maya, who has six weeks to prepare for a language exam. Rather than reading her vocabulary list every evening in the last week, she splits the 300 words into six groups of 50. Each week she tests herself on a new group and revisits the earlier groups briefly. By the third week she is cycling through three groups and notices that the first group needs only a quick check. On exam day she recalls the first groups better than she expected, which she attributes to the repeated spaced tests rather than to extra hours.",
+      "units": [
+        {
+          "key": "maya",
+          "category": "example",
+          "names": ["Maya's exam preparation", "Maya", "Language exam preparation with spaced tests"],
+          "facts": [["six weeks"], ["300 words", "300"], ["six groups", "groups of 50", "50"], ["revisit", "earlier groups"]],
+          "quote": "she splits the 300 words into six groups of 50"
+        }
+      ]
+    },
+    {
+      "key": "s09-interval-rule",
+      "pages": [22, 22],
+      "chapter": "A study routine",
+      "section": "Review intervals",
+      "characteristics": ["incomplete equation (a symbol was lost in extraction)", "dense technical content"],
+      "text": "A simple rule for review intervals multiplies each interval by a constant. If I n is the interval after the n-th successful review, the rule is I n+1 = I n × \ufffd (3) where g is the growth factor, usually between 1.5 and 3. With g = 2 and a first interval of one day, the intervals are 1, 2, 4, 8 and 16 days.",
+      "units": [
+        {
+          "key": "growth-rule",
+          "category": "principle",
+          "accept_categories": ["method", "concept"],
+          "names": ["Review intervals grow by a constant factor", "Interval growth rule", "Growth factor", "Interval multiplication rule"],
+          "facts": [["multipl"], ["constant", "growth factor"], ["1.5"], ["16", "8"]],
+          "quote": "A simple rule for review intervals multiplies each interval by a constant"
+        },
+        {
+          "key": "interval-equation",
+          "category": "equation",
+          "names": ["Review interval growth rule"],
+          "equation": {
+            "tokens": ["n+1", "=i"],
+            "capture_status": ["incomplete", "ambiguous", "needs_review", "text_only"],
+            "must_be_flagged": true,
+            "has_image": true,
+            "phase1": {
+              "latex": "I_{n+1} = I_{n} \\times",
+              "original_latex": "I _ { n + 1 } = I _ { n } \\times",
+              "plain_text": "I n+1 = I n × \ufffd",
+              "surrounding_text": "the rule is",
+              "validation_status": "invalid",
+              "has_image": true
+            }
+          }
+        }
+      ],
+      "relationships": [
+        { "source": "interval-equation", "target": "growth-rule", "types": ["describes", "related_to"], "required": false }
+      ]
+    },
+    {
+      "key": "s10-image-only-equation",
+      "pages": [23, 23],
+      "chapter": "A study routine",
+      "section": "Expected retention",
+      "characteristics": ["image-only equation: the source has no readable text for it"],
+      "text": "The expected retention at the moment of the next review is given by Equation (4), which the original book prints as an image. The equation combines the stability S with the interval I from the previous section; the symbol list beneath it defines each term.",
+      "units": [
+        {
+          "key": "image-equation",
+          "category": "equation",
+          "names": ["Expected retention at the next review", "Equation (4)"],
+          "note": "Only an image of the equation exists. A faithful system keeps it as an image-only equation and does not invent an expression; tokens are only a label because there is no expression to compare.",
+          "equation": {
+            "tokens": ["(4)"],
+            "capture_status": ["image_only", "incomplete", "needs_review"],
+            "must_be_flagged": true,
+            "has_image": true,
+            "phase1": { "latex": "", "plain_text": null, "validation_status": "invalid", "has_image": true }
+          }
+        }
+      ]
+    },
+    {
+      "key": "s11-chapter-roadmap",
+      "pages": [24, 24],
+      "chapter": "Front matter",
+      "section": "How to use this chapter",
+      "characteristics": ["no extractable knowledge: a roadmap"],
+      "expect_nothing": true,
+      "text": "Chapter 3 begins with the cognitive basis of learning. Section 3.1 introduces the three stages of memory, section 3.2 covers spacing and testing, and section 3.3 describes a study routine. The chapter ends with exercises. Readers who already know the basic terms may skip to section 3.2. A glossary at the back of the book lists all technical terms.",
+      "units": []
+    },
+    {
+      "key": "s12-learning-styles",
+      "pages": [25, 25],
+      "chapter": "Evidence",
+      "section": "A common myth",
+      "characteristics": ["a claim the text rejects: extracting it as fact is an error", "two principles in one passage"],
+      "text": "A popular belief holds that each person has a learning style, such as visual or auditory, and that teaching should be matched to it. Controlled studies have not supported the claim: students taught in their preferred style did not learn more than students taught in another style. Learners do differ in what they already know, and prior knowledge strongly affects how well new material is learned. Teaching should therefore be matched to what the learner already knows, not to a supposed style.",
+      "units": [
+        {
+          "key": "learning-styles",
+          "category": "principle",
+          "accept_categories": ["concept", "evidence"],
+          "names": ["Learning styles are not supported", "Learning styles myth", "Learning styles", "Matching teaching to learning style"],
+          "facts": [["not supported", "no support", "unsupported", "myth", "did not learn more"], ["visual", "auditory"], ["preferred style", "learning style"]],
+          "forbidden": ["students learn more when taught in their preferred style", "learning styles improve learning"],
+          "quote": "students taught in their preferred style did not learn more than students taught in another style"
+        },
+        {
+          "key": "prior-knowledge",
+          "category": "principle",
+          "accept_categories": ["concept"],
+          "names": ["Prior knowledge", "Match teaching to prior knowledge", "Prior knowledge affects learning"],
+          "facts": [["prior knowledge", "already know"], ["affect", "strongly", "matched to what the learner"]],
+          "quote": "prior knowledge strongly affects how well new material is learned"
+        }
+      ]
+    }
+  ]
+}

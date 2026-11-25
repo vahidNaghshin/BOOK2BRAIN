@@ -1,0 +1,369 @@
+{
+  "name": "latent_ebm_v1",
+  "version": "1.0.1",
+  "description": "Reference results for six consecutive passages (reading order 10-15, pages 7-11) of 'Introduction to Latent Variable Energy-Based Models', the representative book already processed in the development database. The passage text is not copied here: passages are located by the start of their text. It evaluates extractions that were already made (concepts, principles, equations, relationships) and cannot be run again without changing the stored knowledge.",
+  "source": { "kind": "stored_book", "book_title": "Introduction to Latent Variable Energy-Based Models" },
+  "review": {
+    "prepared_by": "AI assistant (GitHub Copilot) for the project owner, from the stored passage text, before any stored extraction was inspected",
+    "prepared_on": "2026-11-25",
+    "status": "draft",
+    "notes": "Revision 1.0.1: one optional unit (p12 prob-normalization) was added after the first evaluation, see its note. Needs a human domain reviewer's sign-off. Units marked required=false are acceptable extractions but not expected ones. Passages 13 and 14 share a repeated paragraph (Phase 1 overlap), so the 'uncalibrated energies' unit is listed in both."
+  },
+  "categories": ["concept", "principle", "equation"],
+  "passages": [
+    {
+      "key": "p10-ssl",
+      "document_sequence": 10,
+      "pages": [7, 8],
+      "anchor": "The main aim of the SSL is reconstructing the input",
+      "characteristics": ["explanatory text", "several concepts in one passage", "an example", "a stated limitation"],
+      "units": [
+        {
+          "key": "ssl", "category": "concept",
+          "names": ["Self-supervised learning", "SSL"],
+          "facts": [
+            ["reconstruct", "predicting missing parts", "predict missing"],
+            ["hierarchical"],
+            ["largest amount of information", "most information", "information bits"],
+            ["autonomous", "future AI", "future autonomous"]
+          ]
+        },
+        {
+          "key": "blurry", "category": "principle", "accept_categories": ["concept", "evidence"],
+          "names": ["Blurry predictions", "SSL produces blurry predictions", "Single prediction averages all possibilities", "Averaging of possible predictions"],
+          "facts": [["average"], ["blurry"], ["single prediction", "single"], ["image"]]
+        },
+        {
+          "key": "relevant-details", "category": "principle", "accept_categories": ["concept"], "required": false,
+          "names": ["Task-dependent details", "Only relevant details need to be predicted", "Predicting relevant details"],
+          "facts": [["relevant", "task-dependent"], ["not all", "every detail", "no chance", "all possible details"]]
+        },
+        {
+          "key": "ssl-challenge", "category": "concept", "accept_categories": ["principle"], "required": false,
+          "names": ["Multimodal predictions", "Representing uncertainty in prediction", "Challenge of SSL"],
+          "facts": [["uncertainty"], ["multimodal", "multiple predictions", "equally probable"]]
+        },
+        {
+          "key": "prob-intractable", "category": "principle", "accept_categories": ["concept", "evidence"],
+          "names": ["Intractability of probabilistic models", "Probabilistic models are intractable", "Probabilistic models intractable in continuous domains"],
+          "facts": [["intractable"], ["continuous"], ["high dimension", "high-dimensional", "high dimensions"], ["normalized", "normalised"]]
+        },
+        {
+          "key": "ebm-solution", "category": "concept", "accept_categories": ["principle"],
+          "names": ["Energy-based models", "EBM", "Energy-based models with latent variables"],
+          "facts": [
+            ["replace probabilistic", "instead of probabilistic", "alternative to probabilistic", "replace"],
+            ["latent variables"],
+            ["uncertainty"]
+          ]
+        },
+        {
+          "key": "hjepa", "category": "concept", "required": false,
+          "names": ["H-JEPA", "Hierarchical joint embedding predictive architecture"],
+          "facts": [["hierarchical"], ["joint embedding predictive", "jepa"], ["planning", "complex planning"]]
+        },
+        {
+          "key": "next-word", "category": "example", "required": false,
+          "names": ["Next-word prediction", "Predicting the next word versus the next frame", "Language model next word"],
+          "facts": [["next word", "word"], ["frame", "video"], ["distribution", "probability"]]
+        }
+      ],
+      "relationships": [
+        { "source": "next-word", "target": "prob-intractable", "types": ["illustrates", "example_of", "supports"], "required": false }
+      ]
+    },
+    {
+      "key": "p11-roadmap",
+      "document_sequence": 11,
+      "pages": [8, 8],
+      "anchor": "The following sections aim to describe every element",
+      "characteristics": ["a roadmap of the document's sections: no substantive knowledge"],
+      "expect_nothing": true,
+      "units": [
+        {
+          "key": "jepa", "category": "concept", "required": false,
+          "names": ["Joint embedding predictive architecture", "JEPA", "H-JEPA"],
+          "facts": [["joint embedding predictive", "jepa"]],
+          "note": "Named in the roadmap but not explained in this passage; accepted, not expected."
+        }
+      ]
+    },
+    {
+      "key": "p12-ebm",
+      "document_sequence": 12,
+      "pages": [8, 9],
+      "anchor": "Probabilistic models require normalization and may therefore",
+      "characteristics": ["dense technical content", "several principles in one passage", "inline equation", "figure caption inside the passage"],
+      "units": [
+        {
+          "key": "decision-energy", "category": "principle", "accept_categories": ["concept"],
+          "names": ["Lowest energy for the correct answer", "Energy-guided decision making", "Decision making with energy", "Energy-guided model"],
+          "facts": [["lowest energy", "lower energy", "low energy"], ["correct answer", "correct"], ["probabilities", "other answers", "irrelevant", "larger energies", "incorrect"]]
+        },
+        {
+          "key": "ebm", "category": "concept",
+          "names": ["Energy-based model", "Energy-based models", "EBM", "EBMs"],
+          "facts": [
+            ["scalar energy", "scalar"],
+            ["dependencies between variables", "dependency", "compatib"],
+            ["low energies", "lower energy", "low energy"],
+            ["high energies", "incompatible", "high energy"]
+          ]
+        },
+        {
+          "key": "inference", "category": "method", "accept_categories": ["principle", "concept"],
+          "names": ["Inference in an EBM", "Energy minimisation inference", "Inference in energy-based models", "Inference"],
+          "facts": [["minimi", "argmin"], ["y"], ["energy"]]
+        },
+        {
+          "key": "prob-normalization", "category": "principle", "accept_categories": ["concept", "evidence"], "required": false,
+          "names": ["Probabilistic model normalization limitation", "Probabilistic models become intractable in high dimensions", "Normalization makes probabilistic models intractable"],
+          "facts": [["normalization", "normalisation", "normalized"], ["intractable"], ["high-dimensional", "high dimension"]],
+          "note": "Added to the reference after the first evaluation showed the model had found it: the source states it in this passage's first sentence and the first draft of the reference missed it. Optional, so that it cannot raise recall."
+        },
+        {
+          "key": "multimodal", "category": "principle", "accept_categories": ["concept"], "required": false,
+          "names": ["Multimodal dependencies", "EBMs represent multimodal dependencies"],
+          "facts": [["multimodal", "multiple values"], ["compatible"]]
+        },
+        {
+          "key": "smooth", "category": "principle", "accept_categories": ["concept"], "required": false,
+          "names": ["Gradient-based inference", "Smooth and differentiable energy"],
+          "facts": [["continuous"], ["smooth", "differentiable"], ["gradient"]]
+        },
+        {
+          "key": "energy-inference-only", "category": "principle", "accept_categories": ["concept"],
+          "names": ["Energy used only for inference", "Energy function is not the objective function", "Energy function is used only for inference"],
+          "facts": [["only for inference", "inference only", "used only for inference", "only used for inference"], ["not learning", "not for learning", "not the objective", "loss function"]]
+        },
+        {
+          "key": "training", "category": "principle", "accept_categories": ["method", "concept"],
+          "names": ["Training of an EBM", "EBM training", "Training energy-based models"],
+          "facts": [["observed"], ["lower energies", "lower energy"], ["unobserved"]]
+        },
+        {
+          "key": "driving-snow", "category": "example", "required": false,
+          "names": ["Slow driving when snow is present", "Driving in snow"],
+          "facts": [["snow"], ["slow"]]
+        },
+        {
+          "key": "quadratic-energy", "category": "example", "required": false,
+          "names": ["Quadratic energy function", "Energy function for y = x squared"],
+          "facts": [["quadratic", "x 2", "x^2"]]
+        },
+        {
+          "key": "argmin-y", "category": "equation",
+          "names": ["Inference as energy minimisation"],
+          "equation": {
+            "tokens": ["argmin", "fw(x,y)"],
+            "capture_status": ["complete", "incomplete", "ambiguous", "text_only"],
+            "must_be_flagged": false,
+            "in_phase1": false
+          }
+        }
+      ],
+      "relationships": [
+        { "source": "argmin-y", "target": "inference", "types": ["describes", "related_to"], "required": false }
+      ]
+    },
+    {
+      "key": "p13-training",
+      "document_sequence": 13,
+      "pages": [10, 10],
+      "anchor": "In the probabilistic setting, the training consists in finding",
+      "characteristics": ["dense technical content", "numbered equation with damaged symbols in the text", "several concepts and principles", "an example"],
+      "units": [
+        {
+          "key": "nll-training", "category": "concept", "accept_categories": ["principle"],
+          "names": ["Maximum likelihood training", "Negative log-likelihood", "Training of probabilistic models", "Likelihood maximisation", "Maximum likelihood"],
+          "facts": [["likelihood"], ["negative log", "minimi"], ["independent", "independence"]]
+        },
+        {
+          "key": "ebm-flexibility", "category": "principle", "accept_categories": ["concept"],
+          "names": ["Flexibility of EBMs", "EBMs give more flexibility", "Flexibility in the choice of objective function"],
+          "facts": [["flexib"], ["objective function", "loss", "training setup"], ["scoring", "similarity"]]
+        },
+        {
+          "key": "score-not-probability", "category": "principle", "accept_categories": ["concept"],
+          "names": ["Decisions as highest score", "Choosing the highest score", "Scores need not be normalized", "No need for a probabilistic framework"],
+          "facts": [["highest score", "score"], ["not need to be normalized", "need not be normalized", "do not need to be normalized", "normaliz"], ["most probable", "probab"]]
+        },
+        {
+          "key": "label-bias", "category": "concept",
+          "names": ["Label bias problem", "Label bias"],
+          "facts": [["normalized", "normalised"], ["transition probabilities", "transition"], ["state"], ["globally", "global"]]
+        },
+        {
+          "key": "chess", "category": "example", "required": false,
+          "names": ["Chess move selection", "Playing chess", "Chess"],
+          "facts": [["chess"], ["tree", "monte-carlo", "monte carlo", "dynamic"], ["intractable"]]
+        },
+        {
+          "key": "drawbacks", "category": "principle", "accept_categories": ["concept", "evidence"],
+          "names": ["Drawbacks of energy-based models", "Uncalibrated energies", "Limitations of EBMs", "Energies are uncalibrated"],
+          "facts": [["uncertainty"], ["uncalibrated", "arbitrary units"], ["combining", "compare"]]
+        },
+        {
+          "key": "eq-nll", "category": "equation",
+          "names": ["Negative log-likelihood of independent data points"],
+          "equation": {
+            "tokens": ["-log", "pw(yi|xi)"],
+            "capture_status": ["complete", "incomplete", "ambiguous"],
+            "must_be_flagged": false,
+            "has_image": true,
+            "in_phase1": true
+          }
+        }
+      ],
+      "relationships": [
+        { "source": "eq-nll", "target": "nll-training", "types": ["describes", "related_to"], "required": true }
+      ]
+    },
+    {
+      "key": "p14-gibbs",
+      "document_sequence": 14,
+      "pages": [10, 11],
+      "anchor": "Firstly, it is challenging to understand uncertainty",
+      "characteristics": ["repeats a paragraph of the previous passage (overlap)", "equation Phase 1 judged invalid", "footnote and a table inside the passage"],
+      "units": [
+        {
+          "key": "prob-special-case", "category": "principle", "accept_categories": ["concept"],
+          "names": ["Probabilistic models as a special case of EBMs", "Energies as unnormalized negative log probabilities", "Connection between EBMs and probabilistic models"],
+          "facts": [["unnormali"], ["negative log"], ["special", "normali"]]
+        },
+        {
+          "key": "gibbs", "category": "concept",
+          "names": ["Gibbs-Boltzmann distribution", "Gibbs distribution", "Boltzmann distribution"],
+          "facts": [["between 0 and 1", "probabilit"], ["sum", "integral"], ["energies"]]
+        },
+        {
+          "key": "partition", "category": "concept",
+          "names": ["Partition function"],
+          "facts": [["denominator"], ["normalization", "normalisation", "normalizing", "normalization constant"], ["challenging", "hard to compute", "difficult", "intractable"]]
+        },
+        {
+          "key": "inverse-temperature", "category": "concept", "required": false,
+          "names": ["Inverse temperature", "Inverse temperature beta"],
+          "facts": [["inverse temperature"]]
+        },
+        {
+          "key": "uncalibrated", "category": "principle", "accept_categories": ["concept", "evidence"], "required": false,
+          "names": ["Uncalibrated energies", "Energies are uncalibrated", "Drawbacks of energy-based models"],
+          "facts": [["uncalibrated", "arbitrary units"], ["combining", "compare"]],
+          "note": "Repeats the last paragraph of passage 13."
+        },
+        {
+          "key": "ml-degenerate", "category": "principle", "accept_categories": ["concept", "evidence"], "required": false,
+          "names": ["Degenerate maximum likelihood solution", "Maximum likelihood degenerate model", "Infinite probability to every data point"],
+          "facts": [["infinite"], ["zero"], ["data point"], ["bayesian", "regulariz"]]
+        },
+        {
+          "key": "latent-examples", "category": "example", "accept_categories": ["concept", "evidence"], "required": false,
+          "names": ["Examples of latent variables", "Table 1", "Latent variables in prediction problems"],
+          "facts": [["face recognition"], ["speech recognition", "handwriting"], ["pose", "segmentation"]]
+        },
+        {
+          "key": "eq-gibbs", "category": "equation",
+          "names": ["Gibbs-Boltzmann distribution"],
+          "equation": {
+            "tokens": ["p(y|x)", "beta", "f(x,y)"],
+            "capture_status": ["incomplete", "ambiguous", "needs_review"],
+            "must_be_flagged": true,
+            "has_image": true,
+            "in_phase1": true
+          },
+          "note": "Phase 1 stored this equation with validation status 'invalid' and the fraction and integral signs are damaged in the text."
+        }
+      ],
+      "relationships": [
+        { "source": "eq-gibbs", "target": "gibbs", "types": ["describes", "related_to"], "required": true },
+        { "source": "partition", "target": "gibbs", "types": ["part_of", "related_to", "depends_on"], "required": true }
+      ]
+    },
+    {
+      "key": "p15-latent",
+      "document_sequence": 15,
+      "pages": [11, 11],
+      "anchor": "We can expand the possibilities of EBMs by using an additional",
+      "characteristics": ["concepts with several examples", "three equations in running text with damaged symbols", "a worked example", "passage ends mid-sentence"],
+      "units": [
+        {
+          "key": "latent-variables", "category": "concept",
+          "names": ["Latent variables", "Latent variable"],
+          "facts": [["hidden variables", "hidden"], ["never", "rarely"], ["information in y", "not readily available", "capturing"], ["uncertainty"]]
+        },
+        {
+          "key": "structured-prediction", "category": "concept",
+          "names": ["Structured prediction", "Structured prediction problem"],
+          "facts": [["unknown structure", "structure"], ["learner", "resolve"], ["prediction"]]
+        },
+        {
+          "key": "object-detection", "category": "example", "accept_categories": ["concept"], "required": false,
+          "names": ["Object detection", "Structured prediction in object detection"],
+          "facts": [["object detection"], ["segmentation map", "segmentation"]]
+        },
+        {
+          "key": "speech-recognition", "category": "example", "accept_categories": ["concept"], "required": false,
+          "names": ["Speech recognition", "Speech recognition as structured prediction"],
+          "facts": [["speech recognition"], ["segment", "words"]]
+        },
+        {
+          "key": "handwriting", "category": "example", "accept_categories": ["concept"], "required": false,
+          "names": ["Handwriting recognition", "Handwriting recognition as structured prediction"],
+          "facts": [["handwriting"], ["letters", "segmentation"]]
+        },
+        {
+          "key": "self-driving", "category": "example", "accept_categories": ["concept"], "required": false,
+          "names": ["Self-driving cars", "Latent variables in self-driving cars"],
+          "facts": [["self-driving"], ["other drivers", "behaviors", "behaviours"]]
+        },
+        {
+          "key": "lv-inference", "category": "method", "accept_categories": ["principle", "concept"],
+          "names": ["Inference with latent variable EBMs", "Latent variable EBM inference", "Minimizing or marginalizing over latent variables"],
+          "facts": [["minimi"], ["marginaliz"], ["latent", "unseen", "hidden"]]
+        },
+        {
+          "key": "ellipse", "category": "example",
+          "names": ["Ellipse example", "EBM learning an ellipse", "Educational example of inference with latent variable EBMs"],
+          "facts": [["ellipse"], ["angle"], ["r1", "r2", "parameter"], ["squared distance", "distance"]]
+        },
+        {
+          "key": "eq-argmin-z", "category": "equation",
+          "names": ["Energy by minimising over the latent variable"],
+          "equation": {
+            "tokens": ["argmin", "(x,y,z)"],
+            "capture_status": ["complete", "incomplete", "ambiguous", "text_only"],
+            "must_be_flagged": false,
+            "in_phase1": false
+          }
+        },
+        {
+          "key": "eq-marginal", "category": "equation",
+          "names": ["Energy by marginalising over the latent variable"],
+          "equation": {
+            "tokens": ["beta", "log", "dz", "exp"],
+            "capture_status": ["incomplete", "ambiguous", "needs_review", "text_only"],
+            "must_be_flagged": true,
+            "in_phase1": false
+          },
+          "note": "The integral and brackets are damaged in the passage text."
+        },
+        {
+          "key": "eq-ellipse", "category": "equation",
+          "names": ["Ellipse energy function"],
+          "equation": {
+            "tokens": ["r1", "sin", "r2", "cos"],
+            "capture_status": ["complete", "incomplete", "ambiguous", "text_only"],
+            "must_be_flagged": false,
+            "in_phase1": false
+          }
+        }
+      ],
+      "relationships": [
+        { "source": "latent-variables", "target": "structured-prediction", "types": ["applies_to", "related_to", "supports", "depends_on"], "required": true },
+        { "source": "ellipse", "target": "lv-inference", "types": ["illustrates", "example_of", "related_to"], "required": false },
+        { "source": "eq-argmin-z", "target": "lv-inference", "types": ["describes", "related_to"], "required": false }
+      ]
+    }
+  ]
+}

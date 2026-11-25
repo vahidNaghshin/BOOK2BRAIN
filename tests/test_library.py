@@ -6,6 +6,7 @@ from app.schemas import BookMetadata
 from app.services.book_service import BookService
 from app.services.document_service import DocumentService
 from tests.factories import make_epub, make_pdf
+from tests.ui_helpers import patch_ui
 
 
 def upload(service: DocumentService, data: bytes, filename: str, metadata: BookMetadata):
@@ -77,23 +78,10 @@ def library_app() -> None:
 def test_delete_button_asks_for_confirmation_then_removes_the_document(
     document_service: DocumentService, session: Session, storage, settings, engine, monkeypatch
 ) -> None:
-    from contextlib import contextmanager
-
     from streamlit.testing.v1 import AppTest
 
     document = upload(document_service, make_pdf("ui1"), "dune.pdf", BookMetadata(title="Dune", author="Frank Herbert")).document
-
-    @contextmanager
-    def scope():
-        local = Session(bind=engine, autoflush=False, expire_on_commit=False)
-        try:
-            yield local
-        finally:
-            local.close()
-
-    monkeypatch.setattr("app.ui.library.session_scope", scope)
-    monkeypatch.setattr("app.ui.library.get_settings", lambda: settings)
-    monkeypatch.setattr("app.ui.library.get_storage", lambda: storage)
+    patch_ui(monkeypatch, engine, settings, storage)
 
     at = AppTest.from_function(library_app, default_timeout=30)
     at.run()

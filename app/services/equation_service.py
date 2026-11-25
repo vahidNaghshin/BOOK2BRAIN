@@ -43,6 +43,23 @@ def _compact(text: str | None) -> str:
     return _STRIP.sub("", text or "").casefold()
 
 
+_SYMBOLS = re.compile(r"[^\W\d_]+|\d+")
+MIN_SYMBOL_OVERLAP = 0.4
+
+
+def _symbols(text: str | None) -> set[str]:
+    return set(_SYMBOLS.findall(_compact(text)))
+
+
+def related_expressions(first: list[str | None], second: list[str | None]) -> bool:
+    """Whether two readings of an equation share enough symbols to be the same one (not a proof, a guard)."""
+    for a in map(_symbols, first):
+        for b in map(_symbols, second):
+            if a and b and len(a & b) / len(a | b) >= MIN_SYMBOL_OVERLAP:
+                return True
+    return False
+
+
 def classify_capture(
     *,
     original_text: str | None,
@@ -138,6 +155,11 @@ class EquationService:
         found = {e.id: e for e in self.session.scalars(select(Equation).where(Equation.id.in_(ids)))}
         return [found[i] for i in ids if i in found]
 
+    def source_passage(self, unit: KnowledgeUnit) -> Passage | None:
+        """The passage a unit cites as its primary source (the first one if none is marked primary)."""
+        sources = sorted(unit.sources, key=lambda s: (s.role != "primary", s.position))
+        return self.session.get(Passage, sources[0].passage_id) if sources else None
+
     @staticmethod
     def match(content: EquationContent, candidates: list[Equation]) -> Equation | None:
         """The stored equation the model's reading belongs to: the same expression, or the only one there."""
@@ -147,10 +169,15 @@ class EquationService:
             for have in (_compact(equation.latex), _compact(equation.original_latex), _compact(equation.plain_text)):
                 if have and any(w == have or w in have or have in w for w in wanted):
                     return equation
-        # The only stored equation is the likely one, but not when it is just an image: a model that
-        # never saw the image cannot have read it.
+        # The only stored equation is the likely one, but not when it is just an image (a model that
+        # never saw the image cannot have read it) and not when the model's expression has nothing in
+        # common with it: that is another equation of the book, and binding it would attach the wrong source.
         if len(candidates) == 1 and (_compact(candidates[0].latex) or _compact(candidates[0].plain_text)):
-            return candidates[0]
+            only = candidates[0]
+            if related_expressions(
+                [content.latex, content.original_expression], [only.latex, only.original_latex, only.plain_text]
+            ):
+                return only
         return None
 
     # -- recording a capture -----------------------------------------------------------------------

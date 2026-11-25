@@ -173,6 +173,7 @@ class ReviewFlagCode(enum.StrEnum):
     UNRESOLVED_EXTRACTION_ERROR = "unresolved_extraction_error"
     AI_SUGGESTED_RELATIONSHIP = "ai_suggested_relationship"
     CONTEXT_REDUCED = "context_reduced"
+    SOURCE_OUTSIDE_TARGET = "source_outside_target"  # the unit's primary source is not the passage it was extracted from
 
 
 class FlagSeverity(enum.StrEnum):

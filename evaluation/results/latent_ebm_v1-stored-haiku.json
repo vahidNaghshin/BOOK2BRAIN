@@ -1,0 +1,1510 @@
+[
+  {
+    "label": "stored runs of Introduction to Latent Variable Energy-Based Models",
+    "dataset": "latent_ebm_v1",
+    "dataset_version": "1.0.1",
+    "dataset_digest": "3421a1336c2d0f1d",
+    "review_status": "draft",
+    "metrics": [
+      {
+        "key": "unit_recall",
+        "label": "Required units found (recall)",
+        "dimension": "A. Completeness",
+        "value": 0.8823529411764706,
+        "numerator": 15.0,
+        "denominator": 17.0,
+        "unit": "ratio",
+        "definition": "Required reference units (not equations) that an observed unit matches, among those whose own category was extracted on their passage (a unit found under an accepted alternative category still counts).",
+        "note": null
+      },
+      {
+        "key": "unit_recall.concept",
+        "label": "Recall: concept",
+        "dimension": "A. Completeness",
+        "value": 1.0,
+        "numerator": 9.0,
+        "denominator": 9.0,
+        "unit": "ratio",
+        "definition": "Required concept units found.",
+        "note": null
+      },
+      {
+        "key": "unit_recall.method",
+        "label": "Recall: method",
+        "dimension": "A. Completeness",
+        "value": 1.0,
+        "numerator": 1.0,
+        "denominator": 1.0,
+        "unit": "ratio",
+        "definition": "Required method units found.",
+        "note": null
+      },
+      {
+        "key": "unit_recall.principle",
+        "label": "Recall: principle",
+        "dimension": "A. Completeness",
+        "value": 0.7142857142857143,
+        "numerator": 5.0,
+        "denominator": 7.0,
+        "unit": "ratio",
+        "definition": "Required principle units found.",
+        "note": null
+      },
+      {
+        "key": "multi_unit_recall",
+        "label": "Recall in passages with several required units",
+        "dimension": "A. Completeness",
+        "value": 0.8571428571428571,
+        "numerator": 12.0,
+        "denominator": 14.0,
+        "unit": "ratio",
+        "definition": "Required units found, counting only passages whose reference lists two or more.",
+        "note": null
+      },
+      {
+        "key": "unit_precision",
+        "label": "Extracted units explained by the reference (precision)",
+        "dimension": "A. Completeness",
+        "value": 0.7407407407407407,
+        "numerator": 20.0,
+        "denominator": 27.0,
+        "unit": "ratio",
+        "definition": "Units matching a reference unit (required or optional) divided by those plus redundant units and unmatched units in passages whose reference is exhaustive.",
+        "note": "1 unmatched unit(s) in non-exhaustive passages are not counted either way: a reviewer must judge them."
+      },
+      {
+        "key": "empty_passage_accuracy",
+        "label": "Passages without knowledge left without unexpected units",
+        "dimension": "A. Completeness",
+        "value": 0.0,
+        "numerator": 0.0,
+        "denominator": 1.0,
+        "unit": "ratio",
+        "definition": "Passages the reviewer marked as holding no required knowledge in which every extracted unit is one the reference accepts (usually: none).",
+        "note": null
+      },
+      {
+        "key": "possible_merges",
+        "label": "Required units that seem merged into another unit",
+        "dimension": "A. Completeness",
+        "value": 1.0,
+        "numerator": 1.0,
+        "denominator": null,
+        "unit": "count",
+        "definition": "Missed required units whose first name appears in the text of a unit matched to a different reference unit of the same passage.",
+        "note": "Candidates for a reviewer: similar but distinct units may have been merged."
+      },
+      {
+        "key": "key_fact_coverage",
+        "label": "Key facts present in matched units (lexical proxy)",
+        "dimension": "B. Semantic accuracy",
+        "value": 1.0,
+        "numerator": 60.0,
+        "denominator": 60.0,
+        "unit": "ratio",
+        "definition": "Reference facts (each satisfied by any of its alternative words) found in the text of the matched unit. Presence of words, not proof of correct meaning.",
+        "note": "A reviewer must still read the matched pairs; this does not show that meaning was preserved."
+      },
+      {
+        "key": "forbidden_phrase_units",
+        "label": "Matched units containing a phrase the reviewer ruled out",
+        "dimension": "B. Semantic accuracy",
+        "value": 0.0,
+        "numerator": 0.0,
+        "denominator": null,
+        "unit": "count",
+        "definition": "Matched units whose text contains a forbidden phrase of their reference unit.",
+        "note": null
+      },
+      {
+        "key": "unsupported_flagged",
+        "label": "Units the pipeline flagged as unsupported",
+        "dimension": "B. Semantic accuracy",
+        "value": 3.0,
+        "numerator": 3.0,
+        "denominator": null,
+        "unit": "count",
+        "definition": "Units with an open unsupported-claim or quote-mismatch flag.",
+        "note": null
+      },
+      {
+        "key": "primary_source_accuracy",
+        "label": "Matched units citing the right passage",
+        "dimension": "C. Source accuracy",
+        "value": 1.0,
+        "numerator": 20.0,
+        "denominator": 20.0,
+        "unit": "ratio",
+        "definition": "Matched units whose primary source is the reference passage.",
+        "note": null
+      },
+      {
+        "key": "page_accuracy",
+        "label": "Matched units with pages inside the passage's pages",
+        "dimension": "C. Source accuracy",
+        "value": 1.0,
+        "numerator": 20.0,
+        "denominator": 20.0,
+        "unit": "ratio",
+        "definition": "Matched units with page information whose range lies within the reference pages of the passage.",
+        "note": null
+      },
+      {
+        "key": "provenance_verified",
+        "label": "Units whose sources verified",
+        "dimension": "C. Source accuracy",
+        "value": 1.0,
+        "numerator": 35.0,
+        "denominator": 35.0,
+        "unit": "ratio",
+        "definition": "Units with source_status 'verified' (passage exists, quotes found in the passage, pages inside it).",
+        "note": null
+      },
+      {
+        "key": "target_source_rate",
+        "label": "Units whose primary source is the passage that was extracted",
+        "dimension": "C. Source accuracy",
+        "value": 0.7142857142857143,
+        "numerator": 25.0,
+        "denominator": 35.0,
+        "unit": "ratio",
+        "definition": "Units whose primary source is the passage being extracted (the prompt says to extract only from it). A unit that cites a neighbouring passage as its primary source was read from context.",
+        "note": null
+      },
+      {
+        "key": "quote_verification",
+        "label": "Quotes found in their passage",
+        "dimension": "C. Source accuracy",
+        "value": 1.0,
+        "numerator": 37.0,
+        "denominator": 37.0,
+        "unit": "ratio",
+        "definition": "Source quotes whose words were found in the cited passage text.",
+        "note": null
+      },
+      {
+        "key": "schema_valid_calls",
+        "label": "Answers that matched their schema",
+        "dimension": "D. Structural validity",
+        "value": 0.7142857142857143,
+        "numerator": 15.0,
+        "denominator": 21.0,
+        "unit": "ratio",
+        "definition": "Model answers (not relationship calls; failed provider calls have no answer) that parsed and matched the Pydantic schema, counting every retry.",
+        "note": null
+      },
+      {
+        "key": "first_attempt_success",
+        "label": "Extractions that succeeded on the first call",
+        "dimension": "D. Structural validity",
+        "value": 0.6470588235294118,
+        "numerator": 11.0,
+        "denominator": 17.0,
+        "unit": "ratio",
+        "definition": "Executions (passage and category) finished with a single call and not failed.",
+        "note": null
+      },
+      {
+        "key": "category_accuracy",
+        "label": "Matched units in the expected category",
+        "dimension": "D. Structural validity",
+        "value": 0.85,
+        "numerator": 17.0,
+        "denominator": 20.0,
+        "unit": "ratio",
+        "definition": "Matched units whose category is the reference's primary category (not only an accepted alternative).",
+        "note": null
+      },
+      {
+        "key": "duplicate_rate",
+        "label": "Redundant units among stored units",
+        "dimension": "E. Duplication",
+        "value": 0.17142857142857143,
+        "numerator": 6.0,
+        "denominator": 35.0,
+        "unit": "ratio",
+        "definition": "Stored units that match a reference unit already matched by a better unit of the same passage, over all stored units in the dataset.",
+        "note": null
+      },
+      {
+        "key": "duplicates_suppressed",
+        "label": "Duplicates the pipeline refused to store",
+        "dimension": "E. Duplication",
+        "value": 10.0,
+        "numerator": 10.0,
+        "denominator": null,
+        "unit": "count",
+        "definition": "Duplicate units skipped by the pipeline during the evaluated runs.",
+        "note": null
+      },
+      {
+        "key": "relationship_recall",
+        "label": "Required relationships found",
+        "dimension": "B. Semantic accuracy",
+        "value": 0.3333333333333333,
+        "numerator": 1.0,
+        "denominator": 3.0,
+        "unit": "ratio",
+        "definition": "Required reference relationships whose two units were both found, and that a stored relationship connects (either direction for symmetric types).",
+        "note": null
+      },
+      {
+        "key": "relationship_type_accuracy",
+        "label": "Found relationships of an accepted type",
+        "dimension": "B. Semantic accuracy",
+        "value": 1.0,
+        "numerator": 1.0,
+        "denominator": 1.0,
+        "unit": "ratio",
+        "definition": "Of the found relationships, those whose type the reviewer accepts.",
+        "note": null
+      },
+      {
+        "key": "relationship_precision",
+        "label": "Relationships between recognised units that the reference expects",
+        "dimension": "B. Semantic accuracy",
+        "value": 0.5,
+        "numerator": 1.0,
+        "denominator": 2.0,
+        "unit": "ratio",
+        "definition": "Stored relationships between two recognised units that the reference lists. Relationships touching unrecognised units cannot be judged and are listed separately.",
+        "note": null
+      },
+      {
+        "key": "equation_found",
+        "label": "Reference equations found",
+        "dimension": "F. Equations",
+        "value": 1.0,
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "unit": "ratio",
+        "definition": "Reference equations for which an equation unit of the same passage holds at least 60% of the expected symbols.",
+        "note": null
+      },
+      {
+        "key": "equation_original_preserved",
+        "label": "Original expression preserved",
+        "dimension": "F. Equations",
+        "value": 1.0,
+        "numerator": 5.0,
+        "denominator": 5.0,
+        "unit": "ratio",
+        "definition": "Found equations whose original_expression holds at least 80% of the expected symbols.",
+        "note": null
+      },
+      {
+        "key": "equation_source_preserved",
+        "label": "Phase 1 source text preserved",
+        "dimension": "F. Equations",
+        "value": 1.0,
+        "numerator": 2.0,
+        "denominator": 2.0,
+        "unit": "ratio",
+        "definition": "Found equations whose stored source text or LaTeX is the Phase 1 one (never the model's).",
+        "note": null
+      },
+      {
+        "key": "equation_image_retained",
+        "label": "Image reference retained",
+        "dimension": "F. Equations",
+        "value": 1.0,
+        "numerator": 2.0,
+        "denominator": 2.0,
+        "unit": "ratio",
+        "definition": "Found equations that should have an image whose crop reference is kept.",
+        "note": null
+      },
+      {
+        "key": "equation_page_retained",
+        "label": "Page retained",
+        "dimension": "F. Equations",
+        "value": 0.5,
+        "numerator": 2.0,
+        "denominator": 4.0,
+        "unit": "ratio",
+        "definition": "Found equations whose source page lies within the reference pages.",
+        "note": null
+      },
+      {
+        "key": "equation_status_correct",
+        "label": "Capture status as expected",
+        "dimension": "F. Equations",
+        "value": 0.6,
+        "numerator": 3.0,
+        "denominator": 5.0,
+        "unit": "ratio",
+        "definition": "Found equations whose stored capture status is one the reviewer accepts.",
+        "note": null
+      },
+      {
+        "key": "equation_handled",
+        "label": "Equations captured or appropriately flagged",
+        "dimension": "F. Equations",
+        "value": 0.6,
+        "numerator": 3.0,
+        "denominator": 5.0,
+        "unit": "ratio",
+        "definition": "Reference equations that were found with an accepted status, and flagged when the reviewer said the source is incomplete or ambiguous. Equations that are missing count against.",
+        "note": null
+      },
+      {
+        "key": "executions",
+        "label": "Extractions (passage x category, plus relationship steps)",
+        "dimension": "Operations",
+        "value": 17.0,
+        "numerator": null,
+        "denominator": null,
+        "unit": "count",
+        "definition": "Executions recorded by the evaluated runs.",
+        "note": null
+      },
+      {
+        "key": "model_calls",
+        "label": "Model calls",
+        "dimension": "Operations",
+        "value": 25.0,
+        "numerator": null,
+        "denominator": null,
+        "unit": "count",
+        "definition": "Calls to the model, including retries.",
+        "note": null
+      },
+      {
+        "key": "retry_rate",
+        "label": "Retries per extraction",
+        "dimension": "Operations",
+        "value": 0.47058823529411764,
+        "numerator": 8.0,
+        "denominator": 17.0,
+        "unit": "ratio",
+        "definition": "Retries (corrections and resends) divided by executions.",
+        "note": null
+      },
+      {
+        "key": "failure_rate",
+        "label": "Failed extractions",
+        "dimension": "Operations",
+        "value": 0.0,
+        "numerator": 0.0,
+        "denominator": 17.0,
+        "unit": "ratio",
+        "definition": "Executions that ended failed.",
+        "note": null
+      },
+      {
+        "key": "needs_review_rate",
+        "label": "Extractions needing review",
+        "dimension": "Operations",
+        "value": 0.6470588235294118,
+        "numerator": 11.0,
+        "denominator": 17.0,
+        "unit": "ratio",
+        "definition": "Executions that ended needs_review.",
+        "note": null
+      },
+      {
+        "key": "processing_seconds",
+        "label": "Model time (sum of extractions)",
+        "dimension": "Operations",
+        "value": 196.263,
+        "numerator": null,
+        "denominator": null,
+        "unit": "seconds",
+        "definition": "Sum of the recorded duration of every execution.",
+        "note": null
+      },
+      {
+        "key": "seconds_per_passage",
+        "label": "Model time per passage",
+        "dimension": "Operations",
+        "value": 39.2526,
+        "numerator": null,
+        "denominator": null,
+        "unit": "seconds",
+        "definition": "Model time divided by the passages extracted.",
+        "note": null
+      },
+      {
+        "key": "run_seconds",
+        "label": "Wall-clock duration of the runs",
+        "dimension": "Operations",
+        "value": 196.948192,
+        "numerator": null,
+        "denominator": null,
+        "unit": "seconds",
+        "definition": "Sum of the runs' start-to-finish time.",
+        "note": null
+      },
+      {
+        "key": "input_tokens",
+        "label": "Input tokens",
+        "dimension": "Operations",
+        "value": 86735.0,
+        "numerator": null,
+        "denominator": null,
+        "unit": "tokens",
+        "definition": "Tokens sent, as reported by the provider (unavailable if it reports none).",
+        "note": null
+      },
+      {
+        "key": "output_tokens",
+        "label": "Output tokens",
+        "dimension": "Operations",
+        "value": 25439.0,
+        "numerator": null,
+        "denominator": null,
+        "unit": "tokens",
+        "definition": "Tokens received, as reported by the provider.",
+        "note": null
+      },
+      {
+        "key": "estimated_cost",
+        "label": "Estimated cost",
+        "dimension": "Operations",
+        "value": null,
+        "numerator": null,
+        "denominator": null,
+        "unit": "usd",
+        "definition": "Estimated from the configured token prices; unavailable if the model has no prices.",
+        "note": null
+      }
+    ],
+    "runs": [
+      {
+        "run_id": "7ab98233-c473-47d8-a826-d80713afab5a",
+        "status": "completed",
+        "model_configuration_id": null,
+        "provider": null,
+        "model": "anthropic.claude-haiku-5.5",
+        "generation": {
+          "temperature": 0.0,
+          "max_output_tokens": 4096,
+          "structured_output": "none"
+        },
+        "parameters": {
+          "force": false,
+          "limit": 2,
+          "offset": 10,
+          "categories": [
+            "concept",
+            "equation"
+          ],
+          "context_passages": 1,
+          "model_configurations": {
+            "concept": "stormy-claude-haiku-5.5",
+            "equation": "stormy-claude-haiku-5.5"
+          }
+        },
+        "prompt_versions": [
+          "concept_extraction@1.1.0",
+          "equation_extraction@1.1.0"
+        ],
+        "duration_seconds": 44.101197,
+        "input_tokens": null,
+        "output_tokens": null,
+        "cost_usd": null
+      },
+      {
+        "run_id": "85a15ec8-177d-4a65-8caf-7c0321083100",
+        "status": "needs_review",
+        "model_configuration_id": "stormy-claude-haiku-5.5",
+        "provider": "stormy",
+        "model": "anthropic.claude-haiku-5.5",
+        "generation": {
+          "temperature": 0.0,
+          "max_output_tokens": 4096,
+          "structured_output": "none"
+        },
+        "parameters": {
+          "force": false,
+          "limit": 2,
+          "offset": 0,
+          "categories": [
+            "concept",
+            "principle"
+          ],
+          "context_passages": 1,
+          "requested_model_id": "stormy-claude-haiku-5.5",
+          "model_configurations": {
+            "concept": "stormy-claude-haiku-5.5",
+            "principle": "stormy-claude-haiku-5.5"
+          }
+        },
+        "prompt_versions": [
+          "concept_extraction@1.2.0",
+          "principle_extraction@1.2.0"
+        ],
+        "duration_seconds": 64.125514,
+        "input_tokens": 35255,
+        "output_tokens": 11071,
+        "cost_usd": null
+      },
+      {
+        "run_id": "703ae243-9121-4d4c-a18c-f916a47fdc28",
+        "status": "completed",
+        "model_configuration_id": "stormy-claude-haiku-5.5",
+        "provider": "stormy",
+        "model": "anthropic.claude-haiku-5.5",
+        "generation": {
+          "temperature": 0.0,
+          "max_output_tokens": 4096,
+          "structured_output": "none"
+        },
+        "parameters": {
+          "force": true,
+          "limit": 1,
+          "offset": 0,
+          "categories": [
+            "concept"
+          ],
+          "context_passages": 1,
+          "requested_model_id": "stormy-claude-haiku-5.5",
+          "model_configurations": {
+            "concept": "stormy-claude-haiku-5.5"
+          }
+        },
+        "prompt_versions": [
+          "concept_extraction@1.2.0"
+        ],
+        "duration_seconds": 6.294733,
+        "input_tokens": 4106,
+        "output_tokens": 990,
+        "cost_usd": null
+      },
+      {
+        "run_id": "35e84308-4dd8-4d5a-830b-b8cba2838755",
+        "status": "needs_review",
+        "model_configuration_id": "stormy-claude-haiku-5.5",
+        "provider": "stormy",
+        "model": "anthropic.claude-haiku-5.5",
+        "generation": {
+          "temperature": 0.0,
+          "max_output_tokens": 4096,
+          "structured_output": "none"
+        },
+        "parameters": {
+          "force": true,
+          "limit": null,
+          "offset": 0,
+          "categories": [
+            "concept",
+            "principle",
+            "equation"
+          ],
+          "context_passages": 1,
+          "requested_model_id": "stormy-claude-haiku-5.5",
+          "model_configurations": {
+            "concept": "stormy-claude-haiku-5.5",
+            "equation": "stormy-claude-haiku-5.5",
+            "principle": "stormy-claude-haiku-5.5"
+          },
+          "extract_relationships": true
+        },
+        "prompt_versions": [
+          "concept_extraction@1.2.0",
+          "equation_extraction@1.2.0",
+          "principle_extraction@1.2.0",
+          "relationship_extraction@1.0.0"
+        ],
+        "duration_seconds": 82.426748,
+        "input_tokens": 47374,
+        "output_tokens": 13378,
+        "cost_usd": null
+      }
+    ],
+    "matches": [
+      {
+        "passage": "p10-ssl",
+        "reference": "ebm-solution",
+        "category": "concept",
+        "observed_id": "2926aaff-2ff0-4b85-accc-cc518cf1c01f",
+        "observed_title": "energy-based models (EBMs)",
+        "score": 1.25,
+        "name_score": 1.0,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p10-ssl",
+        "reference": "hjepa",
+        "category": "concept",
+        "observed_id": "0ab222ef-8758-441b-a6f1-8d6f5d144f03",
+        "observed_title": "hierarchical joint embedding predictive architecture (H-JEPA)",
+        "score": 1.25,
+        "name_score": 1.0,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p10-ssl",
+        "reference": "ssl",
+        "category": "concept",
+        "observed_id": "ff9403d7-eb01-4de9-a2fb-cc230e451687",
+        "observed_title": "self-supervised learning (SSL)",
+        "score": 1.25,
+        "name_score": 1.0,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p11-roadmap",
+        "reference": "jepa",
+        "category": "concept",
+        "observed_id": "dde3f850-8745-49c8-b274-7187584aa0d8",
+        "observed_title": "hierarchical joint embedding predictive architecture (H-JEPA)",
+        "score": 1.25,
+        "name_score": 1.0,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p12-ebm",
+        "reference": "decision-energy",
+        "category": "principle",
+        "observed_id": "1ae9a2f8-c8bb-4fe3-a8f7-3df148fb148e",
+        "observed_title": "Energy-guided model decision principle",
+        "score": 1.25,
+        "name_score": 1.0,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p12-ebm",
+        "reference": "ebm",
+        "category": "concept",
+        "observed_id": "22d44086-cfc4-41e7-a563-30f04e11cb87",
+        "observed_title": "energy-based models (EBMs)",
+        "score": 1.25,
+        "name_score": 1.0,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p12-ebm",
+        "reference": "energy-inference-only",
+        "category": "principle",
+        "observed_id": "f2f7b61d-c373-4f3d-bb89-230b77dbbe94",
+        "observed_title": "Energy function used only for inference",
+        "score": 1.179,
+        "name_score": 0.857,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p12-ebm",
+        "reference": "inference",
+        "category": "concept",
+        "observed_id": "736d4d35-236e-49cb-a1b5-cf9ff62d59fd",
+        "observed_title": "energy function",
+        "score": 0.875,
+        "name_score": 0.25,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": false,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p12-ebm",
+        "reference": "multimodal",
+        "category": "principle",
+        "observed_id": "d040fbb8-bc8a-45eb-9e0c-65d55555ca68",
+        "observed_title": "Multimodal dependency representation advantage of EBMs",
+        "score": 0.875,
+        "name_score": 0.25,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p12-ebm",
+        "reference": "prob-normalization",
+        "category": "principle",
+        "observed_id": "9666cb21-c71a-4c14-b362-b5ca05c6ee54",
+        "observed_title": "Probabilistic model normalization limitation",
+        "score": 1.25,
+        "name_score": 1.0,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p12-ebm",
+        "reference": "smooth",
+        "category": "principle",
+        "observed_id": "e79947a9-12a3-4884-b403-3350c2be4204",
+        "observed_title": "Smoothness of energy function for continuous y",
+        "score": 0.8,
+        "name_score": 0.1,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p13-training",
+        "reference": "drawbacks",
+        "category": "principle",
+        "observed_id": "9cf1f2d8-820d-49a4-8df4-e41e4223932e",
+        "observed_title": "Advantage of EBMs in high dimensions versus loss of probabilistic setting",
+        "score": 0.841,
+        "name_score": 0.182,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p13-training",
+        "reference": "ebm-flexibility",
+        "category": "concept",
+        "observed_id": "92e737a5-7ed7-42ed-9225-7e8504157dbd",
+        "observed_title": "energy-based models (EBMs)",
+        "score": 0.833,
+        "name_score": 0.167,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": false,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p13-training",
+        "reference": "label-bias",
+        "category": "concept",
+        "observed_id": "bc0223af-0701-42e7-95f3-0b97ff972724",
+        "observed_title": "label bias problem",
+        "score": 1.25,
+        "name_score": 1.0,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p13-training",
+        "reference": "nll-training",
+        "category": "principle",
+        "observed_id": "01ebc067-167d-409f-8f4b-746a83f10822",
+        "observed_title": "Training with probabilistic models",
+        "score": 1.05,
+        "name_score": 0.6,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": false,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p13-training",
+        "reference": "score-not-probability",
+        "category": "principle",
+        "observed_id": "cf1c5f0a-36e4-4081-bd63-5689f2abf8ab",
+        "observed_title": "Choosing the highest-scoring option",
+        "score": 1.0,
+        "name_score": 0.5,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p14-gibbs",
+        "reference": "gibbs",
+        "category": "concept",
+        "observed_id": "f75918d6-dfa4-4667-b287-3910ae8fe28f",
+        "observed_title": "Gibbs-Boltzmann distribution",
+        "score": 1.25,
+        "name_score": 1.0,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p14-gibbs",
+        "reference": "partition",
+        "category": "concept",
+        "observed_id": "079f05c6-6b9f-4e6c-9fee-c0379ea7059a",
+        "observed_title": "partition function",
+        "score": 1.25,
+        "name_score": 1.0,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p15-latent",
+        "reference": "latent-variables",
+        "category": "concept",
+        "observed_id": "10ae196a-9a6e-4726-a303-2546704262f9",
+        "observed_title": "latent variables",
+        "score": 1.25,
+        "name_score": 1.0,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      },
+      {
+        "passage": "p15-latent",
+        "reference": "structured-prediction",
+        "category": "concept",
+        "observed_id": "7ae6cbf9-eab5-4062-87a7-ee646336ac34",
+        "observed_title": "structured prediction problems",
+        "score": 1.25,
+        "name_score": 1.0,
+        "fact_coverage": 1.0,
+        "facts_missing": [],
+        "category_exact": true,
+        "source_correct": true,
+        "pages_ok": true,
+        "forbidden_hits": []
+      }
+    ],
+    "missed": [
+      {
+        "passage": "p10-ssl",
+        "reference": "blurry",
+        "category": "principle",
+        "names": [
+          "Blurry predictions",
+          "SSL produces blurry predictions",
+          "Single prediction averages all possibilities",
+          "Averaging of possible predictions"
+        ],
+        "required": true,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p10-ssl",
+        "reference": "relevant-details",
+        "category": "principle",
+        "names": [
+          "Task-dependent details",
+          "Only relevant details need to be predicted",
+          "Predicting relevant details"
+        ],
+        "required": false,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p10-ssl",
+        "reference": "ssl-challenge",
+        "category": "concept",
+        "names": [
+          "Multimodal predictions",
+          "Representing uncertainty in prediction",
+          "Challenge of SSL"
+        ],
+        "required": false,
+        "reason": "not_extracted",
+        "merged_into": null
+      },
+      {
+        "passage": "p10-ssl",
+        "reference": "prob-intractable",
+        "category": "principle",
+        "names": [
+          "Intractability of probabilistic models",
+          "Probabilistic models are intractable",
+          "Probabilistic models intractable in continuous domains"
+        ],
+        "required": true,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p10-ssl",
+        "reference": "next-word",
+        "category": "example",
+        "names": [
+          "Next-word prediction",
+          "Predicting the next word versus the next frame",
+          "Language model next word"
+        ],
+        "required": false,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p12-ebm",
+        "reference": "training",
+        "category": "principle",
+        "names": [
+          "Training of an EBM",
+          "EBM training",
+          "Training energy-based models"
+        ],
+        "required": true,
+        "reason": "not_extracted",
+        "merged_into": "Energy function used only for inference"
+      },
+      {
+        "passage": "p12-ebm",
+        "reference": "driving-snow",
+        "category": "example",
+        "names": [
+          "Slow driving when snow is present",
+          "Driving in snow"
+        ],
+        "required": false,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p12-ebm",
+        "reference": "quadratic-energy",
+        "category": "example",
+        "names": [
+          "Quadratic energy function",
+          "Energy function for y = x squared"
+        ],
+        "required": false,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p13-training",
+        "reference": "chess",
+        "category": "example",
+        "names": [
+          "Chess move selection",
+          "Playing chess",
+          "Chess"
+        ],
+        "required": false,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p14-gibbs",
+        "reference": "prob-special-case",
+        "category": "principle",
+        "names": [
+          "Probabilistic models as a special case of EBMs",
+          "Energies as unnormalized negative log probabilities",
+          "Connection between EBMs and probabilistic models"
+        ],
+        "required": true,
+        "reason": "not_extracted",
+        "merged_into": null
+      },
+      {
+        "passage": "p14-gibbs",
+        "reference": "inverse-temperature",
+        "category": "concept",
+        "names": [
+          "Inverse temperature",
+          "Inverse temperature beta"
+        ],
+        "required": false,
+        "reason": "not_extracted",
+        "merged_into": "Gibbs-Boltzmann distribution"
+      },
+      {
+        "passage": "p14-gibbs",
+        "reference": "uncalibrated",
+        "category": "principle",
+        "names": [
+          "Uncalibrated energies",
+          "Energies are uncalibrated",
+          "Drawbacks of energy-based models"
+        ],
+        "required": false,
+        "reason": "not_extracted",
+        "merged_into": null
+      },
+      {
+        "passage": "p14-gibbs",
+        "reference": "ml-degenerate",
+        "category": "principle",
+        "names": [
+          "Degenerate maximum likelihood solution",
+          "Maximum likelihood degenerate model",
+          "Infinite probability to every data point"
+        ],
+        "required": false,
+        "reason": "not_extracted",
+        "merged_into": null
+      },
+      {
+        "passage": "p14-gibbs",
+        "reference": "latent-examples",
+        "category": "example",
+        "names": [
+          "Examples of latent variables",
+          "Table 1",
+          "Latent variables in prediction problems"
+        ],
+        "required": false,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p15-latent",
+        "reference": "object-detection",
+        "category": "example",
+        "names": [
+          "Object detection",
+          "Structured prediction in object detection"
+        ],
+        "required": false,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p15-latent",
+        "reference": "speech-recognition",
+        "category": "example",
+        "names": [
+          "Speech recognition",
+          "Speech recognition as structured prediction"
+        ],
+        "required": false,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p15-latent",
+        "reference": "handwriting",
+        "category": "example",
+        "names": [
+          "Handwriting recognition",
+          "Handwriting recognition as structured prediction"
+        ],
+        "required": false,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p15-latent",
+        "reference": "self-driving",
+        "category": "example",
+        "names": [
+          "Self-driving cars",
+          "Latent variables in self-driving cars"
+        ],
+        "required": false,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p15-latent",
+        "reference": "lv-inference",
+        "category": "method",
+        "names": [
+          "Inference with latent variable EBMs",
+          "Latent variable EBM inference",
+          "Minimizing or marginalizing over latent variables"
+        ],
+        "required": true,
+        "reason": "not_attempted",
+        "merged_into": null
+      },
+      {
+        "passage": "p15-latent",
+        "reference": "ellipse",
+        "category": "example",
+        "names": [
+          "Ellipse example",
+          "EBM learning an ellipse",
+          "Educational example of inference with latent variable EBMs"
+        ],
+        "required": true,
+        "reason": "not_attempted",
+        "merged_into": null
+      }
+    ],
+    "extras": [
+      {
+        "passage": "p11-roadmap",
+        "observed_id": "df9b3c85-4c6f-440e-9ca8-80ff6cb688d2",
+        "category": "concept",
+        "title": "joint embedding predictive architectures (JEPAs)",
+        "kind": "redundant",
+        "counted": true,
+        "of_reference": "p11-roadmap/jepa"
+      },
+      {
+        "passage": "p11-roadmap",
+        "observed_id": "d3d39257-7c17-4cc8-a821-b3a279cfebfa",
+        "category": "concept",
+        "title": "energy-based models (EBMs)",
+        "kind": "unmatched",
+        "counted": true,
+        "of_reference": null
+      },
+      {
+        "passage": "p13-training",
+        "observed_id": "1dbd6246-4d01-4fa7-96d4-f473e421ebd9",
+        "category": "principle",
+        "title": "Energy-guided model",
+        "kind": "unmatched",
+        "counted": false,
+        "of_reference": null
+      },
+      {
+        "passage": "p12-ebm",
+        "observed_id": "785b3a7d-acb9-477e-85d2-f214e27748e6",
+        "category": "concept",
+        "title": "energy function",
+        "kind": "redundant",
+        "counted": true,
+        "of_reference": "p12-ebm/energy-inference-only"
+      },
+      {
+        "passage": "p13-training",
+        "observed_id": "21a484b6-ad3d-455d-a22b-11ae1798c6d1",
+        "category": "principle",
+        "title": "Energy-based models: decisions as choosing the option with the highest score",
+        "kind": "redundant",
+        "counted": true,
+        "of_reference": "p13-training/score-not-probability"
+      },
+      {
+        "passage": "p13-training",
+        "observed_id": "06946dcc-01f3-4189-9a02-35953953d2c8",
+        "category": "principle",
+        "title": "Energy-based models give more flexibility than probabilistic models",
+        "kind": "redundant",
+        "counted": true,
+        "of_reference": "p13-training/ebm-flexibility"
+      },
+      {
+        "passage": "p13-training",
+        "observed_id": "64c93cde-2abf-4045-a196-f19580d30249",
+        "category": "principle",
+        "title": "label bias problem",
+        "kind": "redundant",
+        "counted": true,
+        "of_reference": "p13-training/score-not-probability"
+      },
+      {
+        "passage": "p13-training",
+        "observed_id": "3fb53b05-e176-4e14-8bb2-9fbe38f444f6",
+        "category": "principle",
+        "title": "Loss functions in probabilistic setting are tied to negative log-likelihood",
+        "kind": "redundant",
+        "counted": true,
+        "of_reference": "p13-training/nll-training"
+      }
+    ],
+    "equations": [
+      {
+        "passage": "p12-ebm",
+        "reference": "argmin-y",
+        "covered": false,
+        "found": true,
+        "observed_id": "b2045bf5-3159-4373-9191-ddf7eb2ea79c",
+        "token_coverage": 1.0,
+        "original_preserved": true,
+        "source_preserved": null,
+        "image_retained": null,
+        "page_retained": null,
+        "capture_status": null,
+        "status_ok": false,
+        "flagged": true,
+        "flag_ok": true,
+        "handled_correctly": false
+      },
+      {
+        "passage": "p13-training",
+        "reference": "eq-nll",
+        "covered": true,
+        "found": true,
+        "observed_id": "a2a57725-4f83-4582-9718-3f23ca53ed34",
+        "token_coverage": 1.0,
+        "original_preserved": true,
+        "source_preserved": true,
+        "image_retained": true,
+        "page_retained": true,
+        "capture_status": "incomplete",
+        "status_ok": true,
+        "flagged": true,
+        "flag_ok": true,
+        "handled_correctly": true
+      },
+      {
+        "passage": "p14-gibbs",
+        "reference": "eq-gibbs",
+        "covered": true,
+        "found": true,
+        "observed_id": "15af707e-250a-4c95-b057-4d6e41109488",
+        "token_coverage": 1.0,
+        "original_preserved": true,
+        "source_preserved": true,
+        "image_retained": true,
+        "page_retained": true,
+        "capture_status": "needs_review",
+        "status_ok": true,
+        "flagged": true,
+        "flag_ok": true,
+        "handled_correctly": true
+      },
+      {
+        "passage": "p15-latent",
+        "reference": "eq-argmin-z",
+        "covered": false,
+        "found": true,
+        "observed_id": "56481bf8-1ef6-4952-9fe9-083c7b63b8c2",
+        "token_coverage": 1.0,
+        "original_preserved": true,
+        "source_preserved": null,
+        "image_retained": null,
+        "page_retained": false,
+        "capture_status": "needs_review",
+        "status_ok": false,
+        "flagged": true,
+        "flag_ok": true,
+        "handled_correctly": false
+      },
+      {
+        "passage": "p15-latent",
+        "reference": "eq-marginal",
+        "covered": false,
+        "found": true,
+        "observed_id": "a7e8e75c-c89c-47da-8bb3-90f1ecc9dfac",
+        "token_coverage": 1.0,
+        "original_preserved": true,
+        "source_preserved": null,
+        "image_retained": null,
+        "page_retained": false,
+        "capture_status": "needs_review",
+        "status_ok": true,
+        "flagged": true,
+        "flag_ok": true,
+        "handled_correctly": true
+      },
+      {
+        "passage": "p15-latent",
+        "reference": "eq-ellipse",
+        "covered": false,
+        "found": false,
+        "observed_id": null,
+        "token_coverage": null,
+        "original_preserved": null,
+        "source_preserved": null,
+        "image_retained": null,
+        "page_retained": null,
+        "capture_status": null,
+        "status_ok": null,
+        "flagged": null,
+        "flag_ok": null,
+        "handled_correctly": null
+      }
+    ],
+    "relationships": [
+      {
+        "passage": "p10-ssl",
+        "source": "next-word",
+        "target": "prob-intractable",
+        "expected_types": [
+          "illustrates",
+          "example_of",
+          "supports"
+        ],
+        "found": false,
+        "stored_type": null,
+        "type_ok": null,
+        "required": false,
+        "covered": false
+      },
+      {
+        "passage": "p12-ebm",
+        "source": "argmin-y",
+        "target": "inference",
+        "expected_types": [
+          "describes",
+          "related_to"
+        ],
+        "found": false,
+        "stored_type": null,
+        "type_ok": null,
+        "required": false,
+        "covered": false
+      },
+      {
+        "passage": "p13-training",
+        "source": "eq-nll",
+        "target": "nll-training",
+        "expected_types": [
+          "describes",
+          "related_to"
+        ],
+        "found": false,
+        "stored_type": null,
+        "type_ok": null,
+        "required": true,
+        "covered": true
+      },
+      {
+        "passage": "p14-gibbs",
+        "source": "eq-gibbs",
+        "target": "gibbs",
+        "expected_types": [
+          "describes",
+          "related_to"
+        ],
+        "found": true,
+        "stored_type": "describes",
+        "type_ok": true,
+        "required": true,
+        "covered": true
+      },
+      {
+        "passage": "p14-gibbs",
+        "source": "partition",
+        "target": "gibbs",
+        "expected_types": [
+          "part_of",
+          "related_to",
+          "depends_on"
+        ],
+        "found": false,
+        "stored_type": null,
+        "type_ok": null,
+        "required": true,
+        "covered": true
+      },
+      {
+        "passage": "p15-latent",
+        "source": "latent-variables",
+        "target": "structured-prediction",
+        "expected_types": [
+          "applies_to",
+          "related_to",
+          "supports",
+          "depends_on"
+        ],
+        "found": false,
+        "stored_type": null,
+        "type_ok": null,
+        "required": true,
+        "covered": false
+      },
+      {
+        "passage": "p15-latent",
+        "source": "ellipse",
+        "target": "lv-inference",
+        "expected_types": [
+          "illustrates",
+          "example_of",
+          "related_to"
+        ],
+        "found": false,
+        "stored_type": null,
+        "type_ok": null,
+        "required": false,
+        "covered": false
+      },
+      {
+        "passage": "p15-latent",
+        "source": "eq-argmin-z",
+        "target": "lv-inference",
+        "expected_types": [
+          "describes",
+          "related_to"
+        ],
+        "found": false,
+        "stored_type": null,
+        "type_ok": null,
+        "required": false,
+        "covered": false
+      }
+    ],
+    "unexpected_relationships": [
+      {
+        "source": "label bias problem",
+        "target": "label bias problem",
+        "type": "related_to",
+        "origin": "extracted",
+        "kind": "unjudged"
+      },
+      {
+        "source": "Training with probabilistic models",
+        "target": "Loss functions in probabilistic setting are tied to negative log-likelihood",
+        "type": "related_to",
+        "origin": "extracted",
+        "kind": "unjudged"
+      },
+      {
+        "source": "Advantage of EBMs in high dimensions versus loss of probabilistic setting",
+        "target": "energy-based models (EBMs)",
+        "type": "related_to",
+        "origin": "extracted",
+        "kind": "not_in_reference"
+      },
+      {
+        "source": "Energy-based models: decisions as choosing the option with the highest score",
+        "target": "energy-based models (EBMs)",
+        "type": "applies_to",
+        "origin": "extracted",
+        "kind": "unjudged"
+      },
+      {
+        "source": "label bias problem",
+        "target": "Energy-based models: decisions as choosing the option with the highest score",
+        "type": "related_to",
+        "origin": "extracted",
+        "kind": "unjudged"
+      }
+    ],
+    "passages_covered": 5,
+    "passages_total": 6
+  }
+]

@@ -20,7 +20,7 @@ from app.services.relationship_service import RelationshipService, UnitRelations
 from app.services.review_flag_service import FlagRead, ReviewFlagService
 from database.models import REVIEW_STATUSES, KnowledgeUnit
 
-__all__ = ["AttemptDetail", "KnowledgeDetail", "KnowledgeFilter", "KnowledgeListItem", "KnowledgePage", "KnowledgeService", "KnowledgeSummary", "SourceDetail"]
+__all__ = ["AttemptDetail", "FailedExtraction", "KnowledgeDetail", "KnowledgeFilter", "KnowledgeListItem", "KnowledgeOverview", "KnowledgePage", "KnowledgeService", "KnowledgeSummary", "SourceDetail"]
 
 
 class KnowledgeListItem(BaseModel):
@@ -48,6 +48,29 @@ class KnowledgeSummary(BaseModel):
     by_review: dict[str, int]
     by_validation: dict[str, int]
     needing_attention: int  # uncertain, or not validated
+
+
+class FailedExtraction(BaseModel):
+    run_id: uuid.UUID
+    passage_id: uuid.UUID | None
+    page_start: int | None
+    category: str
+    attempts: int
+    failure_code: str | None
+    failure_message: str | None
+    model: str | None
+    prompt: str | None
+
+
+class KnowledgeOverview(BaseModel):
+    """Everything about the extracted knowledge of a book that a reviewer wants at a glance."""
+
+    by_type: dict[str, int]
+    equation_status: dict[str, int]  # capture status -> equations
+    relationships_by_type: dict[str, int]
+    open_flags: dict[str, int]  # review flag code -> open flags
+    attempt_outcomes: dict[str, int]  # result of every model call, including provider errors
+    failed_extractions: list[FailedExtraction]
 
 
 class SourceDetail(BaseModel):
@@ -159,6 +182,26 @@ class KnowledgeService:
             by_review=self.repository.counts_by(f, KnowledgeUnit.review_status),
             by_validation=by_validation,
             needing_attention=self.repository.count(KnowledgeFilter(**{**f.__dict__, "uncertain_only": True})),
+        )
+
+    def overview(self, f: KnowledgeFilter, *, failures: int = 20) -> KnowledgeOverview:
+        """Counts by category, equation capture status, relationship type and open review flag, plus the extractions that failed."""
+        failed = [
+            FailedExtraction(
+                run_id=execution.extraction_run_id, passage_id=execution.passage_id, page_start=page, category=execution.knowledge_type,
+                attempts=execution.attempt_count, failure_code=execution.failure_code, failure_message=execution.failure_message,
+                model=execution.model_id,
+                prompt=f"{execution.prompt_name}@{execution.prompt_version}" if execution.prompt_name else None,
+            )
+            for execution, page in self.repository.failed_executions(f.book_id, failures)
+        ]
+        return KnowledgeOverview(
+            by_type=self.repository.counts_by(f, KnowledgeUnit.knowledge_type),
+            equation_status=EquationService(self.session).counts_by_status(f.book_id),
+            relationships_by_type=self.repository.relationship_counts(f.book_id),
+            open_flags=ReviewFlagService(self.session).counts_by_code(f.book_id),
+            attempt_outcomes=self.repository.attempt_outcomes(f.book_id),
+            failed_extractions=failed,
         )
 
     def detail(self, unit_id: uuid.UUID) -> KnowledgeDetail:

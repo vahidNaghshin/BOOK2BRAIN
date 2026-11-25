@@ -45,7 +45,7 @@ REVIEW_FLAG_CODES = (
     "invalid_source_reference", "source_quote_mismatch", "page_inconsistent", "no_source", "incomplete_equation",
     "ambiguous_equation", "equation_needs_review", "low_confidence", "uncertain_extraction", "inferred_content",
     "unsupported_claim", "potential_duplicate", "repeated_validation_failure", "unresolved_extraction_error",
-    "ai_suggested_relationship", "context_reduced",
+    "ai_suggested_relationship", "context_reduced", "source_outside_target",
 )
 FLAG_SEVERITIES = ("info", "warning", "error")
 FLAG_STATUSES = ("open", "resolved", "dismissed")

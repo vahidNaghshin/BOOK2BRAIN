@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.knowledge.types import KnowledgeType
 from app.repositories.extraction_repository import ExtractionRepository
 from app.services.errors import InvalidReviewError, KnowledgeNotFoundError
-from app.services.knowledge_service import KnowledgeDetail, KnowledgeFilter, KnowledgeService, KnowledgeSummary
+from app.services.knowledge_service import KnowledgeDetail, KnowledgeFilter, KnowledgeOverview, KnowledgeService, KnowledgeSummary
 from app.ui.formatting import format_timestamp
 from app.ui.navigation import goto
 from app.ui.selection import render_document_selector, safe_load_library
@@ -40,7 +40,9 @@ def render_knowledge_page() -> None:
 
     try:
         with session_scope() as session:
-            summary = KnowledgeService(session).summary(base)
+            service = KnowledgeService(session)
+            summary = service.summary(base)
+            overview = service.overview(base)
             runs = ExtractionRepository(session).list_runs(book.id, limit=20)
     except SQLAlchemyError:
         logger.exception("Could not load knowledge")
@@ -53,6 +55,7 @@ def render_knowledge_page() -> None:
         return
 
     _render_summary(summary)
+    _render_overview(overview)
     filters = _render_filters(base, summary, runs)
     page_unit = _render_list(filters)
     if page_unit is not None:
@@ -70,6 +73,51 @@ def _render_summary(summary: KnowledgeSummary) -> None:
     columns[2].metric("Approved", summary.by_review.get("approved", 0))
     columns[3].metric("Rejected", summary.by_review.get("rejected", 0))
     columns[4].metric("Unreviewed", summary.by_review.get("unreviewed", 0))
+
+
+def _count_table(counts: dict[str, int], heading: str, empty: str) -> None:
+    st.markdown(f"**{heading}**")
+    if counts:
+        st.dataframe(
+            [{"": _label(key), "Count": total} for key, total in sorted(counts.items(), key=lambda item: (-item[1], item[0]))], hide_index=True
+        )
+    else:
+        st.caption(empty)
+
+
+def _render_overview(overview: KnowledgeOverview) -> None:
+    attempts = sum(overview.attempt_outcomes.values())
+    problems = attempts - overview.attempt_outcomes.get("schema_valid", 0)
+    label = f"Overview: {len(overview.failed_extractions)} failed extraction(s), {sum(overview.open_flags.values())} open review flag(s)"
+    with st.expander(label, expanded=bool(overview.failed_extractions)):
+        columns = st.columns(4)
+        with columns[0]:
+            _count_table(overview.by_type, "Units by category", "No units.")
+        with columns[1]:
+            _count_table(overview.equation_status, "Equations by capture status", "No equations.")
+        with columns[2]:
+            _count_table(overview.relationships_by_type, "Relationships by type", "No relationships.")
+        with columns[3]:
+            _count_table(overview.open_flags, "Open review flags", "No open flags.")
+        st.markdown("**Model calls**")
+        if attempts:
+            st.caption(f"{attempts} call(s); {problems} did not end as a clean, schema-valid answer. " + ", ".join(f"{_label(k)}: {v}" for k, v in sorted(overview.attempt_outcomes.items())))
+        else:
+            st.caption("No model calls are recorded.")
+        st.markdown("**Failed extractions** (every attempt was used and nothing could be stored)")
+        if overview.failed_extractions:
+            st.dataframe(
+                [
+                    {
+                        "Page": f.page_start or "-", "Category": f.category, "Attempts": f.attempts, "Reason": f.failure_code or "",
+                        "Message": (f.failure_message or "")[:160], "Model": f.model or "", "Prompt": f.prompt or "",
+                    }
+                    for f in overview.failed_extractions
+                ],
+                hide_index=True,
+            )
+        else:
+            st.caption("None.")
 
 
 def _render_filters(base: KnowledgeFilter, summary: KnowledgeSummary, runs) -> KnowledgeFilter:

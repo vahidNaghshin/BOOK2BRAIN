@@ -10,7 +10,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from database.models import (
+    ExtractionAttempt,
     ExtractionExecution,
+    ExtractionRun,
+    KnowledgeRelationship,
     KnowledgeUnit,
     KnowledgeUnitPassage,
     Passage,
@@ -65,6 +68,41 @@ class KnowledgeRepository:
     def counts_by(self, f: KnowledgeFilter, column) -> dict[str, int]:
         rows = self.session.execute(self._where(select(column, func.count()), f).group_by(column))
         return {key: total for key, total in rows}
+
+    def relationship_counts(self, book_id: uuid.UUID) -> dict[str, int]:
+        rows = self.session.execute(
+            select(KnowledgeRelationship.relationship_type, func.count())
+            .where(KnowledgeRelationship.book_id == book_id)
+            .group_by(KnowledgeRelationship.relationship_type)
+        )
+        return {kind: total for kind, total in rows}
+
+    def attempt_outcomes(self, book_id: uuid.UUID) -> dict[str, int]:
+        """Every model call of the book's runs, by the result of checking its answer (or 'provider_error')."""
+        outcome = func.coalesce(ExtractionAttempt.validation_outcome, "not_validated")
+        rows = self.session.execute(
+            select(ExtractionAttempt.status, outcome, func.count())
+            .join(ExtractionRun, ExtractionRun.id == ExtractionAttempt.extraction_run_id)
+            .where(ExtractionRun.book_id == book_id)
+            .group_by(ExtractionAttempt.status, outcome)
+        )
+        counts: dict[str, int] = {}
+        for status, result, total in rows:
+            key = "provider_error" if status == "provider_error" else result
+            counts[key] = counts.get(key, 0) + total
+        return counts
+
+    def failed_executions(self, book_id: uuid.UUID, limit: int) -> list[tuple[ExtractionExecution, int | None]]:
+        """Extractions that ended failed (every attempt used up), newest first, with the passage's first page."""
+        rows = self.session.execute(
+            select(ExtractionExecution, Passage.page_start)
+            .join(ExtractionRun, ExtractionRun.id == ExtractionExecution.extraction_run_id)
+            .outerjoin(Passage, Passage.id == ExtractionExecution.passage_id)
+            .where(ExtractionRun.book_id == book_id, ExtractionExecution.status == "failed")
+            .order_by(ExtractionExecution.completed_at.desc())
+            .limit(limit)
+        )
+        return [(execution, page) for execution, page in rows]
 
     def get(self, unit_id: uuid.UUID) -> KnowledgeUnit | None:
         return self.session.get(KnowledgeUnit, unit_id)
